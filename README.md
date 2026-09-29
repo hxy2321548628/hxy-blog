@@ -13,13 +13,30 @@
 
 ```bash
 make setup
+cp .env.example .env
+make dev-db
 make dev-backend
 make dev-web
 ```
 
 Go API 默认监听 `http://localhost:8080`，Vite 默认监听 `http://localhost:5173`。前端开发服务器会将 `/api` 代理到 Go API。
 
-MySQL 环境将在确认现有镜像名称和标签后加入，不会自动拉取其他镜像。
+MySQL 使用腾讯云服务器已有的 `mysql:8.0` 镜像 Digest。开发环境的数据库和 Web 端口只绑定 `127.0.0.1`，不会直接暴露到局域网或公网。
+
+## 容器基线
+
+```bash
+# 校验 Compose 配置，不启动容器。
+make container-config
+
+# 构建 API 与 Web 镜像。
+make container-build
+
+# 使用 .env 构建并启动完整本地环境。
+make container-up
+```
+
+Web 默认通过 `http://127.0.0.1:8080` 访问，并把 `/api` 请求转发到 Go API。生产环境由 CD 使用 GHCR 镜像 Digest 覆盖本地镜像名，不在服务器拉取源码或执行构建。
 
 ## 质量检查
 

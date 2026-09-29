@@ -48,7 +48,7 @@ test/          跨边界测试（必要时再创建）
 ## 常用命令
 
 ```bash
-make dev-db       # 启动本地 MySQL（镜像确认后启用）
+make dev-db       # 使用已确认的 MySQL 8.0 镜像启动本地数据库
 make dev-backend  # 启动 Go API
 make dev-web      # 启动 React
 make test         # 运行测试
