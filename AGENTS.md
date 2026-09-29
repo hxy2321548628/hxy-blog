@@ -19,6 +19,7 @@
 - Git 规范：`.claude/git-command.md`
 - AI 开发流程：`doc/engineering/ai-coding-workflow.md`
 - 架构决策：`doc/architecture/0001-initial-architecture.md`
+- 媒体存储决策：`doc/architecture/0002-media-storage.md`
 - 产品待办：`doc/product/backlog.md`
 
 ## 目录边界
