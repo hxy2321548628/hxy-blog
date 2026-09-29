@@ -41,7 +41,8 @@ jobs:
         run: |
           set -eu
           docker network create hxy-blog-ci
-          docker run --detach --name hxy-blog-api-ci --network hxy-blog-ci hxy-blog-api:local
+          # 与 Compose 中的服务发现名称保持一致，Nginx 通过 api:8080 转发请求。
+          docker run --detach --name hxy-blog-api-ci --network hxy-blog-ci --network-alias api hxy-blog-api:local
           docker run --detach --name hxy-blog-web-ci --network hxy-blog-ci --publish 127.0.0.1:18080:8080 hxy-blog-web:local
 
           for attempt in $(seq 1 30); do
