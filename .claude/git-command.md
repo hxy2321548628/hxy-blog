@@ -3,6 +3,8 @@
 ## 分支
 
 - 主分支：`main`，始终保持可部署。
+- 禁止直接在 `main` 开发或推送；所有变更必须从短生命周分支提交 Pull Request。
+- Pull Request 必须通过 GitHub Actions 的 `check` 状态检查后才能合并。
 - 短生命周分支：`feat/<topic>`、`fix/<topic>`、`chore/<topic>`。
 - 每个分支只对应一个故事或 Bug，优先在 1–2 天内合并。
 

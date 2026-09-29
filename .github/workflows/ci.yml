@@ -1,14 +1,24 @@
 name: CI
 
 on:
+  # 所有合并到 main 的变更都必须先通过这条 PR 门禁。
   pull_request:
+    branches: [main]
+  # 合并后再检查一次 main，及时发现合并结果导致的问题。
   push:
     branches: [main]
 
+# 同一分支有新提交时取消旧任务，节省 Actions 时长。
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# CI 只需读取仓库内容，避免给予不必要的写权限。
 permissions:
   contents: read
 
 jobs:
+  # main 分支保护引用了 check 这个名称，修改时需同步更新远程规则。
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
