@@ -1,0 +1,1529 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="hxy.blog 视觉设计手册：面向个人博客的设计原则、令牌、组件与页面规范。"
+    />
+    <title>hxy.blog · 视觉设计手册</title>
+    <style>
+      /*
+       * 设计令牌：使用语义名称隔离具体色值，后续 React 实现可直接迁移为 CSS 变量。
+       * 视觉方向提炼自参考界面的克制、轻边界与低噪声体验，但针对博客阅读场景重新设计。
+       */
+      :root {
+        color-scheme: light;
+        --canvas: #ffffff;
+        --surface: #ffffff;
+        --surface-muted: #f7f8fa;
+        --surface-raised: #ffffff;
+        --text-primary: #101217;
+        --text-secondary: #5f646d;
+        --text-tertiary: #858a93;
+        --text-inverse: #ffffff;
+        --border-subtle: rgba(16, 18, 23, 0.06);
+        --border-default: rgba(16, 18, 23, 0.11);
+        --border-strong: rgba(16, 18, 23, 0.18);
+        --hover: rgba(37, 48, 70, 0.055);
+        --active: rgba(37, 48, 70, 0.09);
+        --accent: #416fe5;
+        --accent-hover: #345fcf;
+        --accent-soft: #edf2ff;
+        --success: #16865c;
+        --success-soft: #ecf8f2;
+        --warning: #a96708;
+        --warning-soft: #fff7e8;
+        --danger: #d83a3a;
+        --danger-soft: #fff0f0;
+        --code-bg: #f5f6f8;
+        --shadow-float: 0 14px 40px rgba(16, 18, 23, 0.08), 0 2px 8px rgba(16, 18, 23, 0.04);
+        --focus-ring: 0 0 0 3px rgba(65, 111, 229, 0.22);
+      }
+
+      html[data-theme="dark"] {
+        color-scheme: dark;
+        --canvas: #151517;
+        --surface: #1c1c1f;
+        --surface-muted: #222226;
+        --surface-raised: #29292d;
+        --text-primary: #f6f7f9;
+        --text-secondary: #c5c8ce;
+        --text-tertiary: #92969f;
+        --text-inverse: #121318;
+        --border-subtle: rgba(255, 255, 255, 0.06);
+        --border-default: rgba(255, 255, 255, 0.11);
+        --border-strong: rgba(255, 255, 255, 0.18);
+        --hover: rgba(255, 255, 255, 0.07);
+        --active: rgba(255, 255, 255, 0.12);
+        --accent: #6f98ff;
+        --accent-hover: #86a8ff;
+        --accent-soft: rgba(89, 132, 244, 0.15);
+        --success: #55c795;
+        --success-soft: rgba(41, 143, 99, 0.16);
+        --warning: #e5ad53;
+        --warning-soft: rgba(201, 136, 31, 0.16);
+        --danger: #ff7777;
+        --danger-soft: rgba(215, 62, 62, 0.16);
+        --code-bg: #222226;
+        --shadow-float: 0 18px 50px rgba(0, 0, 0, 0.28), 0 2px 10px rgba(0, 0, 0, 0.18);
+        --focus-ring: 0 0 0 3px rgba(111, 152, 255, 0.28);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--canvas);
+        color: var(--text-primary);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.65;
+        transition: background-color 200ms ease, color 200ms ease;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      button,
+      a {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible {
+        outline: none;
+        box-shadow: var(--focus-ring);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      /* 页面骨架：左侧目录在桌面常驻，正文保持适合长文阅读的宽度。 */
+      .shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 252px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        padding: 24px 18px;
+        background: var(--surface-muted);
+        border-right: 1px solid var(--border-subtle);
+        overflow-y: auto;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 40px;
+        margin-bottom: 28px;
+        padding: 0 8px;
+        font-size: 16px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 26px;
+        height: 26px;
+        place-items: center;
+        border-radius: 8px;
+        background: var(--text-primary);
+        color: var(--text-inverse);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .version {
+        margin-left: auto;
+        color: var(--text-tertiary);
+        font-size: 11px;
+        font-weight: 500;
+      }
+
+      .nav-label {
+        margin: 20px 10px 7px;
+        color: var(--text-tertiary);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .nav-link {
+        display: flex;
+        align-items: center;
+        min-height: 36px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        transition: background-color 120ms ease, color 120ms ease;
+      }
+
+      .nav-link:hover {
+        background: var(--hover);
+        color: var(--text-primary);
+      }
+
+      .nav-link.is-active {
+        background: var(--active);
+        color: var(--text-primary);
+        font-weight: 550;
+      }
+
+      .sidebar-note {
+        margin: 28px 8px 0;
+        padding-top: 18px;
+        border-top: 1px solid var(--border-subtle);
+        color: var(--text-tertiary);
+        font-size: 12px;
+      }
+
+      .main {
+        min-width: 0;
+      }
+
+      .topbar {
+        position: sticky;
+        z-index: 20;
+        top: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 64px;
+        padding: 10px clamp(24px, 5vw, 64px);
+        border-bottom: 1px solid var(--border-subtle);
+        background: color-mix(in srgb, var(--canvas) 88%, transparent);
+        backdrop-filter: blur(18px);
+      }
+
+      .breadcrumb {
+        color: var(--text-secondary);
+        font-size: 13px;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .icon-button,
+      .button {
+        border: 1px solid var(--border-default);
+        background: var(--surface);
+        color: var(--text-primary);
+        cursor: pointer;
+        transition:
+          background-color 120ms ease,
+          border-color 120ms ease,
+          color 120ms ease;
+      }
+
+      .icon-button {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border-radius: 10px;
+      }
+
+      .icon-button:hover,
+      .button:hover {
+        background: var(--hover);
+        border-color: var(--border-strong);
+      }
+
+      .content {
+        width: min(1080px, calc(100% - 48px));
+        margin: 0 auto;
+        padding: 72px 0 120px;
+      }
+
+      .hero {
+        max-width: 800px;
+        padding-bottom: 62px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 18px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 650;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        width: 18px;
+        height: 1px;
+        background: currentColor;
+        content: "";
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        max-width: 720px;
+        margin-bottom: 22px;
+        font-size: clamp(38px, 6vw, 68px);
+        font-weight: 650;
+        letter-spacing: -0.055em;
+        line-height: 1.08;
+      }
+
+      .hero-lead {
+        max-width: 670px;
+        margin-bottom: 28px;
+        color: var(--text-secondary);
+        font-size: clamp(17px, 2vw, 20px);
+        line-height: 1.75;
+      }
+
+      .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+        color: var(--text-tertiary);
+        font-size: 12px;
+      }
+
+      .section {
+        padding: 74px 0;
+        border-top: 1px solid var(--border-subtle);
+        scroll-margin-top: 70px;
+      }
+
+      .section-heading {
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr);
+        gap: 28px;
+        margin-bottom: 38px;
+      }
+
+      .section-index {
+        color: var(--text-tertiary);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+      }
+
+      h2 {
+        margin-bottom: 12px;
+        font-size: clamp(25px, 3vw, 34px);
+        font-weight: 620;
+        letter-spacing: -0.035em;
+        line-height: 1.25;
+      }
+
+      h3 {
+        margin-bottom: 8px;
+        font-size: 16px;
+        font-weight: 620;
+        line-height: 1.45;
+      }
+
+      .section-intro {
+        max-width: 680px;
+        margin-bottom: 0;
+        color: var(--text-secondary);
+        font-size: 16px;
+      }
+
+      .principle-grid,
+      .component-grid,
+      .color-grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .principle-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .principle-card {
+        min-height: 190px;
+        padding: 24px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 14px;
+        background: var(--surface);
+      }
+
+      .principle-number {
+        display: block;
+        margin-bottom: 38px;
+        color: var(--text-tertiary);
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 11px;
+      }
+
+      .principle-card p {
+        margin-bottom: 0;
+        color: var(--text-secondary);
+        font-size: 13px;
+      }
+
+      .do-not {
+        margin-top: 16px;
+        padding: 18px 20px;
+        border-left: 2px solid var(--danger);
+        background: var(--danger-soft);
+        color: var(--text-secondary);
+        font-size: 13px;
+      }
+
+      /* 色彩与排版样本。 */
+      .color-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .swatch {
+        overflow: hidden;
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+        background: var(--surface);
+      }
+
+      .swatch-color {
+        height: 98px;
+        background: var(--swatch);
+      }
+
+      .swatch-info {
+        padding: 13px 14px;
+      }
+
+      .swatch-name {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .swatch-value {
+        color: var(--text-tertiary);
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 11px;
+      }
+
+      .type-specimen {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        gap: 24px;
+        padding: 20px 0;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .type-meta {
+        color: var(--text-tertiary);
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 11px;
+      }
+
+      .type-display {
+        font-size: 40px;
+        font-weight: 650;
+        letter-spacing: -0.045em;
+        line-height: 1.15;
+      }
+
+      .type-title {
+        font-size: 26px;
+        font-weight: 620;
+        letter-spacing: -0.025em;
+        line-height: 1.3;
+      }
+
+      .type-body {
+        max-width: 660px;
+        color: var(--text-secondary);
+        font-size: 16px;
+        line-height: 1.85;
+      }
+
+      .token-row {
+        display: flex;
+        align-items: flex-end;
+        min-height: 72px;
+        gap: 10px;
+        padding: 12px 0;
+      }
+
+      .space-token {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        gap: 6px;
+        color: var(--text-tertiary);
+        font-size: 10px;
+        text-align: center;
+      }
+
+      .space-token i {
+        display: block;
+        width: var(--size);
+        height: var(--size);
+        border-radius: 3px;
+        background: var(--accent-soft);
+        border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+      }
+
+      /* 页面原型：展示规范如何落到博客首页与正文页。 */
+      .browser-frame {
+        overflow: hidden;
+        border: 1px solid var(--border-default);
+        border-radius: 16px;
+        background: var(--surface);
+        box-shadow: var(--shadow-float);
+      }
+
+      .browser-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 42px;
+        padding: 0 15px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: var(--surface-muted);
+      }
+
+      .browser-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--border-strong);
+      }
+
+      .blog-preview {
+        min-height: 570px;
+        background: var(--canvas);
+      }
+
+      .blog-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 64px;
+        padding: 0 36px;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .blog-logo {
+        font-size: 16px;
+        font-weight: 680;
+        letter-spacing: -0.02em;
+      }
+
+      .blog-nav {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+
+      .blog-nav span:first-child {
+        color: var(--text-primary);
+      }
+
+      .preview-body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 220px;
+        gap: 54px;
+        width: min(820px, calc(100% - 48px));
+        margin: 0 auto;
+        padding: 52px 0 60px;
+      }
+
+      .preview-title {
+        margin-bottom: 28px;
+        font-size: 30px;
+        font-weight: 630;
+        letter-spacing: -0.04em;
+        line-height: 1.25;
+      }
+
+      .post-row {
+        padding: 22px 0;
+        border-top: 1px solid var(--border-subtle);
+      }
+
+      .post-row:first-of-type {
+        border-top: 0;
+      }
+
+      .post-meta,
+      .preview-aside-label {
+        color: var(--text-tertiary);
+        font-size: 10px;
+      }
+
+      .post-row h4 {
+        margin: 6px 0 8px;
+        font-size: 17px;
+        font-weight: 620;
+        letter-spacing: -0.015em;
+      }
+
+      .post-row p {
+        margin-bottom: 0;
+        color: var(--text-secondary);
+        font-size: 12px;
+        line-height: 1.75;
+      }
+
+      .preview-aside {
+        padding-top: 8px;
+      }
+
+      .preview-aside-block {
+        margin-bottom: 26px;
+        padding-bottom: 22px;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .preview-aside p {
+        margin: 8px 0 0;
+        color: var(--text-secondary);
+        font-size: 11px;
+      }
+
+      .tag-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 10px;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 25px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        background: var(--surface-muted);
+        color: var(--text-secondary);
+        font-size: 10px;
+      }
+
+      .layout-note {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 22px;
+      }
+
+      .metric {
+        padding: 18px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 12px;
+      }
+
+      .metric strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 18px;
+      }
+
+      .metric span {
+        color: var(--text-tertiary);
+        font-size: 11px;
+      }
+
+      /* 组件样本：真实状态比静态色板更能约束后续实现。 */
+      .component-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .component-panel {
+        padding: 26px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 14px;
+        background: var(--surface);
+      }
+
+      .component-caption {
+        margin-bottom: 22px;
+        color: var(--text-tertiary);
+        font-size: 11px;
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .button {
+        min-height: 38px;
+        padding: 7px 14px;
+        border-radius: 9px;
+        font-size: 13px;
+        font-weight: 560;
+      }
+
+      .button-primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #ffffff;
+      }
+
+      .button-primary:hover {
+        border-color: var(--accent-hover);
+        background: var(--accent-hover);
+      }
+
+      .button-quiet {
+        border-color: transparent;
+        background: transparent;
+        color: var(--text-secondary);
+      }
+
+      .button-danger {
+        border-color: transparent;
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+
+      .field-label {
+        display: block;
+        margin-bottom: 7px;
+        font-size: 12px;
+        font-weight: 560;
+      }
+
+      .field-input {
+        width: 100%;
+        height: 42px;
+        padding: 0 12px;
+        border: 1px solid var(--border-default);
+        border-radius: 9px;
+        background: var(--surface);
+        color: var(--text-primary);
+      }
+
+      .field-input::placeholder {
+        color: var(--text-tertiary);
+      }
+
+      .field-help {
+        margin: 7px 0 0;
+        color: var(--text-tertiary);
+        font-size: 11px;
+      }
+
+      .notice {
+        display: flex;
+        gap: 10px;
+        padding: 13px 14px;
+        border-radius: 10px;
+        background: var(--success-soft);
+        color: var(--success);
+        font-size: 12px;
+      }
+
+      .notice::before {
+        content: "✓";
+        font-weight: 700;
+      }
+
+      .upload-zone {
+        display: grid;
+        min-height: 190px;
+        place-items: center;
+        padding: 28px;
+        border: 1px dashed var(--border-strong);
+        border-radius: 14px;
+        background: var(--surface-muted);
+        text-align: center;
+      }
+
+      .upload-icon {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 12px;
+        place-items: center;
+        border: 1px solid var(--border-default);
+        border-radius: 11px;
+        background: var(--surface);
+        color: var(--accent);
+        font-size: 20px;
+      }
+
+      .upload-zone p {
+        margin-bottom: 5px;
+        font-size: 13px;
+        font-weight: 580;
+      }
+
+      .upload-zone small {
+        color: var(--text-tertiary);
+        font-size: 11px;
+      }
+
+      .upload-state {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 12px;
+        padding: 10px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+      }
+
+      .upload-thumb {
+        width: 44px;
+        height: 44px;
+        border-radius: 7px;
+        background:
+          linear-gradient(145deg, transparent 48%, rgba(255, 255, 255, 0.16) 49%),
+          linear-gradient(135deg, #8199c8, #344665);
+      }
+
+      .upload-file {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .upload-file strong,
+      .upload-file small {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .upload-file strong {
+        font-size: 12px;
+      }
+
+      .upload-file small {
+        color: var(--text-tertiary);
+        font-size: 10px;
+      }
+
+      .progress {
+        width: 72px;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--border-subtle);
+      }
+
+      .progress::after {
+        display: block;
+        width: 68%;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent);
+        content: "";
+      }
+
+      .spec-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+
+      .spec-table th,
+      .spec-table td {
+        padding: 13px 12px;
+        border-bottom: 1px solid var(--border-subtle);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .spec-table th {
+        color: var(--text-tertiary);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .spec-table td:first-child {
+        width: 24%;
+        font-weight: 580;
+      }
+
+      .spec-table code,
+      code {
+        padding: 2px 6px;
+        border-radius: 5px;
+        background: var(--code-bg);
+        color: var(--text-secondary);
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 0.88em;
+      }
+
+      .checklist {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px 28px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .checklist li {
+        position: relative;
+        padding: 11px 0 11px 26px;
+        border-bottom: 1px solid var(--border-subtle);
+        color: var(--text-secondary);
+        font-size: 13px;
+      }
+
+      .checklist li::before {
+        position: absolute;
+        top: 13px;
+        left: 1px;
+        color: var(--accent);
+        content: "○";
+        font-weight: 700;
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        padding-top: 30px;
+        border-top: 1px solid var(--border-subtle);
+        color: var(--text-tertiary);
+        font-size: 11px;
+      }
+
+      /* 平板：收起目录，保留完整的组件与页面展示。 */
+      @media (max-width: 960px) {
+        .shell {
+          grid-template-columns: 58px minmax(0, 1fr);
+        }
+
+        .sidebar {
+          padding: 20px 9px;
+        }
+
+        .brand {
+          padding: 0 7px;
+        }
+
+        .brand span:not(.brand-mark),
+        .brand .version,
+        .sidebar nav,
+        .sidebar-note {
+          display: none;
+        }
+
+        .principle-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .principle-card {
+          min-height: 0;
+        }
+
+        .principle-number {
+          margin-bottom: 18px;
+        }
+
+        .color-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      /* 手机：博客采用单列阅读，不保留桌面侧栏，也不压缩触控目标。 */
+      @media (max-width: 680px) {
+        .shell {
+          display: block;
+        }
+
+        .sidebar {
+          display: none;
+        }
+
+        .topbar {
+          min-height: 56px;
+          padding: 8px 16px;
+        }
+
+        .content {
+          width: min(100% - 32px, 1080px);
+          padding: 46px 0 80px;
+        }
+
+        .hero {
+          padding-bottom: 46px;
+        }
+
+        h1 {
+          font-size: 34px;
+          letter-spacing: -0.045em;
+        }
+
+        .section {
+          padding: 54px 0;
+        }
+
+        .section-heading,
+        .type-specimen {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+
+        .component-grid,
+        .layout-note,
+        .checklist {
+          grid-template-columns: 1fr;
+        }
+
+        .preview-body {
+          display: block;
+          width: calc(100% - 32px);
+          padding: 34px 0;
+        }
+
+        .preview-aside,
+        .blog-nav span:not(:last-child) {
+          display: none;
+        }
+
+        .blog-header {
+          height: 56px;
+          padding: 0 16px;
+        }
+
+        .spec-table-wrap {
+          overflow-x: auto;
+        }
+
+        .spec-table {
+          min-width: 620px;
+        }
+
+        .button,
+        .icon-button {
+          min-height: 44px;
+        }
+
+        .footer {
+          display: block;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" aria-label="手册目录">
+        <div class="brand">
+          <span class="brand-mark">h</span>
+          <span>hxy.blog</span>
+          <span class="version">v0.1</span>
+        </div>
+
+        <nav>
+          <p class="nav-label">Foundation</p>
+          <a class="nav-link is-active" href="#direction">视觉方向</a>
+          <a class="nav-link" href="#color">色彩系统</a>
+          <a class="nav-link" href="#type">排版与节奏</a>
+          <p class="nav-label">Experience</p>
+          <a class="nav-link" href="#layout">博客布局</a>
+          <a class="nav-link" href="#components">核心组件</a>
+          <a class="nav-link" href="#upload">图片上传</a>
+          <a class="nav-link" href="#responsive">响应式</a>
+          <a class="nav-link" href="#accessibility">无障碍</a>
+          <a class="nav-link" href="#handoff">开发交付</a>
+        </nav>
+
+        <p class="sidebar-note">
+          本手册借鉴参考界面的设计方法，不复制其品牌资产。实际产品名称和标志可在品牌阶段替换。
+        </p>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <span class="breadcrumb">设计系统 / 视觉设计手册</span>
+          <div class="toolbar">
+            <button class="icon-button" id="themeToggle" type="button" aria-label="切换深浅色主题">
+              <span id="themeIcon" aria-hidden="true">◐</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="content">
+          <section class="hero" aria-labelledby="page-title">
+            <span class="eyebrow">Visual system · 2026</span>
+            <h1 id="page-title">简约，而不止于简单。</h1>
+            <p class="hero-lead">
+              面向个人技术博客的视觉设计基线：让界面保持安静，让内容成为唯一主角；用清晰层级、克制反馈和细腻状态，建立长期可信的阅读体验。
+            </p>
+            <div class="hero-meta">
+              <span>适用：React SPA</span>
+              <span>覆盖：读者端 + 管理端</span>
+              <span>主题：浅色 / 深色</span>
+              <span>状态：提案，待确认</span>
+            </div>
+          </section>
+
+          <section class="section" id="direction">
+            <div class="section-heading">
+              <span class="section-index">01 — DIRECTION</span>
+              <div>
+                <h2>视觉方向</h2>
+                <p class="section-intro">
+                  继承参考界面的低噪声、轻边界和渐进披露，将“工具效率”转译为博客的“阅读专注”。视觉克制不等于信息缺失，而是每个元素都有清晰优先级。
+                </p>
+              </div>
+            </div>
+
+            <div class="principle-grid">
+              <article class="principle-card">
+                <span class="principle-number">01 / CONTENT</span>
+                <h3>内容先于容器</h3>
+                <p>优先使用留白、排版与分隔线建立层级，避免给每一段内容套卡片。图片和文字拥有完整呼吸空间。</p>
+              </article>
+              <article class="principle-card">
+                <span class="principle-number">02 / RESTRAINT</span>
+                <h3>蓝色只表达动作</h3>
+                <p>强调色仅用于链接、焦点、当前状态与主操作；导航选中优先使用中性底色，避免页面到处发蓝。</p>
+              </article>
+              <article class="principle-card">
+                <span class="principle-number">03 / DETAIL</span>
+                <h3>细节提供信任</h3>
+                <p>上传进度、保存状态、键盘焦点、空状态与错误恢复均需明确。高级感来自完整状态，而不是装饰。</p>
+              </article>
+            </div>
+
+            <div class="do-not">
+              <strong>避免：</strong>大面积渐变、玻璃拟态、厚重阴影、过度圆角、连续入场动画，以及首页堆叠大量统计卡片。
+            </div>
+          </section>
+
+          <section class="section" id="color">
+            <div class="section-heading">
+              <span class="section-index">02 — COLOR</span>
+              <div>
+                <h2>色彩系统</h2>
+                <p class="section-intro">
+                  中性色负责内容与结构，冷蓝色负责交互。深色模式采用三级表面而非机械反色，确保长时间阅读仍舒适。
+                </p>
+              </div>
+            </div>
+
+            <div class="color-grid">
+              <div class="swatch">
+                <div class="swatch-color" style="--swatch: #ffffff"></div>
+                <div class="swatch-info"><span class="swatch-name">Canvas</span><span class="swatch-value">#FFFFFF</span></div>
+              </div>
+              <div class="swatch">
+                <div class="swatch-color" style="--swatch: #f7f8fa"></div>
+                <div class="swatch-info"><span class="swatch-name">Muted</span><span class="swatch-value">#F7F8FA</span></div>
+              </div>
+              <div class="swatch">
+                <div class="swatch-color" style="--swatch: #101217"></div>
+                <div class="swatch-info"><span class="swatch-name">Ink</span><span class="swatch-value">#101217</span></div>
+              </div>
+              <div class="swatch">
+                <div class="swatch-color" style="--swatch: #416fe5"></div>
+                <div class="swatch-info"><span class="swatch-name">Accent</span><span class="swatch-value">#416FE5</span></div>
+              </div>
+              <div class="swatch">
+                <div class="swatch-color" style="--swatch: #151517"></div>
+                <div class="swatch-info"><span class="swatch-name">Dark Canvas</span><span class="swatch-value">#151517</span></div>
+              </div>
+              <div class="swatch">
+                <div class="swatch-color" style="--swatch: #29292d"></div>
+                <div class="swatch-info"><span class="swatch-name">Dark Raised</span><span class="swatch-value">#29292D</span></div>
+              </div>
+              <div class="swatch">
+                <div class="swatch-color" style="--swatch: #16865c"></div>
+                <div class="swatch-info"><span class="swatch-name">Success</span><span class="swatch-value">#16865C</span></div>
+              </div>
+              <div class="swatch">
+                <div class="swatch-color" style="--swatch: #d83a3a"></div>
+                <div class="swatch-info"><span class="swatch-name">Danger</span><span class="swatch-value">#D83A3A</span></div>
+              </div>
+            </div>
+
+            <div class="spec-table-wrap" style="margin-top: 26px">
+              <table class="spec-table">
+                <thead><tr><th>角色</th><th>规则</th><th>典型场景</th></tr></thead>
+                <tbody>
+                  <tr><td>Primary</td><td>正文对比度目标 ≥ 7:1</td><td>标题、正文、关键数字</td></tr>
+                  <tr><td>Secondary</td><td>不用于小于 14px 的关键信息</td><td>摘要、说明、次级导航</td></tr>
+                  <tr><td>Accent</td><td>单屏面积原则上不超过 8%</td><td>链接、当前 Tab、主按钮、焦点</td></tr>
+                  <tr><td>Status</td><td>颜色必须同时配合图标或文字</td><td>保存、上传、校验和删除反馈</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section" id="type">
+            <div class="section-heading">
+              <span class="section-index">03 — TYPOGRAPHY</span>
+              <div>
+                <h2>排版与节奏</h2>
+                <p class="section-intro">
+                  使用系统字体降低加载成本并贴合操作系统。文章正文比产品界面更舒展，建议中文正文 17px、行高 1.85，阅读列不超过 720px。
+                </p>
+              </div>
+            </div>
+
+            <div class="type-specimen">
+              <span class="type-meta">Display / 40–56<br />650 / 1.10</span>
+              <div class="type-display">写作，是整理思考的过程。</div>
+            </div>
+            <div class="type-specimen">
+              <span class="type-meta">Title / 26–34<br />620 / 1.30</span>
+              <div class="type-title">从一个小问题开始，逐步建立自己的知识地图</div>
+            </div>
+            <div class="type-specimen">
+              <span class="type-meta">Body / 17<br />400 / 1.85</span>
+              <div class="type-body">
+                好的阅读界面不会持续提醒你它的存在。标题、段落、引用与代码之间形成稳定节奏，让读者无需理解界面，就能自然地沿着内容向下移动。
+              </div>
+            </div>
+
+            <div class="token-row" aria-label="4 像素间距系统">
+              <span class="space-token"><i style="--size: 4px"></i>4</span>
+              <span class="space-token"><i style="--size: 8px"></i>8</span>
+              <span class="space-token"><i style="--size: 12px"></i>12</span>
+              <span class="space-token"><i style="--size: 16px"></i>16</span>
+              <span class="space-token"><i style="--size: 20px"></i>20</span>
+              <span class="space-token"><i style="--size: 24px"></i>24</span>
+              <span class="space-token"><i style="--size: 32px"></i>32</span>
+              <span class="space-token"><i style="--size: 48px"></i>48</span>
+            </div>
+          </section>
+
+          <section class="section" id="layout">
+            <div class="section-heading">
+              <span class="section-index">04 — LAYOUT</span>
+              <div>
+                <h2>博客布局</h2>
+                <p class="section-intro">
+                  首页使用“文章主列 + 轻量个人信息”结构；文章页收敛为单一阅读列。侧栏只承载发现信息，不与文章争夺注意力。
+                </p>
+              </div>
+            </div>
+
+            <div class="browser-frame" aria-label="博客首页视觉示例">
+              <div class="browser-bar" aria-hidden="true"><span class="browser-dot"></span><span class="browser-dot"></span><span class="browser-dot"></span></div>
+              <div class="blog-preview">
+                <div class="blog-header">
+                  <span class="blog-logo">hxy.blog</span>
+                  <div class="blog-nav"><span>文章</span><span>归档</span><span>关于</span><span>⌕</span></div>
+                </div>
+                <div class="preview-body">
+                  <div>
+                    <p class="post-meta">你好，我是 hxy。这里记录技术、产品与长期思考。</p>
+                    <div class="preview-title">最近写作</div>
+                    <article class="post-row">
+                      <span class="post-meta">2026.09.27 · 工程实践 · 8 分钟</span>
+                      <h4>在小型项目里建立真正有用的持续交付</h4>
+                      <p>从分支保护、自动化检查到可回滚部署，讨论个人项目如何保持轻量，又不牺牲工程质量。</p>
+                    </article>
+                    <article class="post-row">
+                      <span class="post-meta">2026.09.18 · Go · 12 分钟</span>
+                      <h4>一次 Go API 边界设计的取舍记录</h4>
+                      <p>用最少的抽象隔离 HTTP、业务规则与数据访问，并保留未来演进所需的边界。</p>
+                    </article>
+                    <article class="post-row">
+                      <span class="post-meta">2026.09.02 · 随笔 · 5 分钟</span>
+                      <h4>简约并不是把东西删到最少</h4>
+                      <p>真正的简约来自秩序：读者能准确找到下一步，也能在需要时获得足够细节。</p>
+                    </article>
+                  </div>
+                  <aside class="preview-aside">
+                    <div class="preview-aside-block">
+                      <span class="preview-aside-label">ABOUT</span>
+                      <p>独立开发者。关注 Go、React、AI 工程化，以及如何把复杂系统讲清楚。</p>
+                    </div>
+                    <div class="preview-aside-block">
+                      <span class="preview-aside-label">TOPICS</span>
+                      <div class="tag-list"><span class="tag">Go</span><span class="tag">React</span><span class="tag">AI</span><span class="tag">设计</span></div>
+                    </div>
+                    <div>
+                      <span class="preview-aside-label">CURRENTLY</span>
+                      <p>正在构建这个博客。</p>
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+
+            <div class="layout-note">
+              <div class="metric"><strong>1120px</strong><span>页面内容最大宽度</span></div>
+              <div class="metric"><strong>680–720px</strong><span>文章正文舒适宽度</span></div>
+              <div class="metric"><strong>64px</strong><span>桌面全局导航高度</span></div>
+            </div>
+          </section>
+
+          <section class="section" id="components">
+            <div class="section-heading">
+              <span class="section-index">05 — COMPONENTS</span>
+              <div>
+                <h2>核心组件</h2>
+                <p class="section-intro">
+                  组件默认安静，交互时才提高对比度。圆角保持 8–14px 的克制范围，阴影只属于浮层和需要脱离画布的对象。
+                </p>
+              </div>
+            </div>
+
+            <div class="component-grid">
+              <div class="component-panel">
+                <p class="component-caption">按钮 / 每个区域只保留一个主操作</p>
+                <div class="button-row">
+                  <button class="button button-primary" type="button">发布文章</button>
+                  <button class="button" type="button">保存草稿</button>
+                  <button class="button button-quiet" type="button">取消</button>
+                  <button class="button button-danger" type="button">删除</button>
+                </div>
+              </div>
+              <div class="component-panel">
+                <p class="component-caption">输入框 / 标签始终可见，不用占位符替代</p>
+                <label class="field-label" for="titleExample">文章标题</label>
+                <input class="field-input" id="titleExample" type="text" placeholder="输入清晰、具体的标题" />
+                <p class="field-help">建议不超过 60 个中文字符。</p>
+              </div>
+              <div class="component-panel">
+                <p class="component-caption">反馈 / 明确说明结果与下一步</p>
+                <div class="notice">草稿已保存，最后更新于 14:32。</div>
+              </div>
+              <div class="component-panel">
+                <p class="component-caption">标签 / 用于分类，不承担主操作</p>
+                <div class="tag-list"><span class="tag">Go</span><span class="tag">React</span><span class="tag">工程化</span><span class="tag">阅读约 8 分钟</span></div>
+              </div>
+            </div>
+
+            <div class="spec-table-wrap" style="margin-top: 26px">
+              <table class="spec-table">
+                <thead><tr><th>组件</th><th>默认</th><th>Hover / Focus</th><th>关键约束</th></tr></thead>
+                <tbody>
+                  <tr><td>文本链接</td><td>正文色或强调色</td><td>下划线，不使用位移</td><td>正文内链接不得只靠颜色区分</td></tr>
+                  <tr><td>文章条目</td><td>无卡片背景</td><td>标题变为 Accent</td><td>整个条目可点击时保留明确焦点框</td></tr>
+                  <tr><td>对话框</td><td>Raised 表面</td><td>焦点锁定在弹层内</td><td>仅用于不可忽略的短任务</td></tr>
+                  <tr><td>Toast</td><td>右下角、最长 5 秒</td><td>悬停暂停消失</td><td>错误必须提供恢复操作或详情</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section" id="upload">
+            <div class="section-heading">
+              <span class="section-index">06 — IMAGE UPLOAD</span>
+              <div>
+                <h2>图片上传体验</h2>
+                <p class="section-intro">
+                  图片上传属于 MVP 核心路径。管理端必须让用户看见格式限制、上传进度、最终 URL/插入结果与失败恢复，不能只显示一个不透明的加载动画。
+                </p>
+              </div>
+            </div>
+
+            <div class="component-grid">
+              <div class="component-panel">
+                <div class="upload-zone">
+                  <div>
+                    <div class="upload-icon" aria-hidden="true">↑</div>
+                    <p>拖放图片，或点击选择</p>
+                    <small>JPG、PNG、WebP · 单张不超过 10 MB</small>
+                  </div>
+                </div>
+              </div>
+              <div class="component-panel">
+                <p class="component-caption">上传中 / 文件名、进度与取消操作同时可见</p>
+                <div class="upload-state">
+                  <div class="upload-thumb" aria-hidden="true"></div>
+                  <div class="upload-file"><strong>cover-delivery-pipeline.webp</strong><small>2.4 MB · 正在上传 68%</small></div>
+                  <div class="progress" aria-label="上传进度 68%"></div>
+                </div>
+                <div class="upload-state">
+                  <div class="upload-thumb" aria-hidden="true"></div>
+                  <div class="upload-file"><strong>architecture.png</strong><small style="color: var(--success)">上传完成 · 已插入正文</small></div>
+                  <span aria-label="上传成功" style="color: var(--success)">✓</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="spec-table-wrap" style="margin-top: 26px">
+              <table class="spec-table">
+                <thead><tr><th>阶段</th><th>界面反馈</th><th>MVP 行为</th></tr></thead>
+                <tbody>
+                  <tr><td>选择前</td><td>展示格式、大小和用途说明</td><td>点击选择与拖放；单次可上传多张</td></tr>
+                  <tr><td>校验中</td><td>在文件级显示原因</td><td>拒绝非图片、超限文件；保留其他合法文件</td></tr>
+                  <tr><td>上传中</td><td>真实进度、文件名、取消</td><td>不阻塞编辑；离开页面前提示未完成任务</td></tr>
+                  <tr><td>完成</td><td>缩略图、成功状态、插入结果</td><td>支持替代文本；允许复制 URL 或插入 Markdown</td></tr>
+                  <tr><td>失败</td><td>具体错误、重试与移除</td><td>失败项单独重试，不重新上传成功项</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="section" id="responsive">
+            <div class="section-heading">
+              <span class="section-index">07 — RESPONSIVE</span>
+              <div>
+                <h2>响应式与交互</h2>
+                <p class="section-intro">
+                  响应式不是同比缩小。移动端删除低价值并列信息、保持 44px 触控目标，将文章目录变为按需打开的浮层。
+                </p>
+              </div>
+            </div>
+
+            <div class="spec-table-wrap">
+              <table class="spec-table">
+                <thead><tr><th>断点</th><th>布局行为</th><th>内容策略</th></tr></thead>
+                <tbody>
+                  <tr><td>≥ 1200px</td><td>1120px 居中容器；首页双列</td><td>侧栏展示简介、主题和近期状态</td></tr>
+                  <tr><td>768–1199px</td><td>内容边距 32px；侧栏缩窄或下沉</td><td>导航仍为横向，减少次级入口</td></tr>
+                  <tr><td>&lt; 768px</td><td>单列；边距 16–20px</td><td>摘要缩短，隐藏非关键元数据</td></tr>
+                  <tr><td>&lt; 480px</td><td>编辑器工具栏可横向滚动</td><td>上传控件占满宽度，操作文字化</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="do-not" style="border-left-color: var(--accent); background: var(--accent-soft)">
+              <strong>动效基线：</strong>悬停反馈 100–120ms，颜色/展开 180–220ms，对话框不超过 300ms；不使用 Hover 位移，并尊重 <code>prefers-reduced-motion</code>。
+            </div>
+          </section>
+
+          <section class="section" id="accessibility">
+            <div class="section-heading">
+              <span class="section-index">08 — ACCESSIBILITY</span>
+              <div>
+                <h2>无障碍基线</h2>
+                <p class="section-intro">
+                  目标遵循 WCAG 2.2 AA。无障碍不是发布前补丁，而是组件验收的一部分；键盘、屏幕阅读器和弱视用户应能完成完整发布与阅读路径。
+                </p>
+              </div>
+            </div>
+
+            <ul class="checklist">
+              <li>正文文字对比度不低于 4.5:1，大字不低于 3:1。</li>
+              <li>所有纯图标按钮必须提供准确的可访问名称。</li>
+              <li>键盘焦点使用 2px 强调色，并保留至少 2px 外间距。</li>
+              <li>触控目标至少 44×44px，视觉图标可维持 16–20px。</li>
+              <li>文章图片必须支持替代文本；装饰图使用空 alt。</li>
+              <li>错误不能只依赖颜色，需包含原因与恢复方式。</li>
+              <li>标题层级连续，页面仅有一个语义主标题。</li>
+              <li>主题切换遵循系统偏好，并保存用户主动选择。</li>
+            </ul>
+          </section>
+
+          <section class="section" id="handoff">
+            <div class="section-heading">
+              <span class="section-index">09 — HANDOFF</span>
+              <div>
+                <h2>开发交付规则</h2>
+                <p class="section-intro">
+                  MVP 不引入重量级 UI 框架。先实现设计令牌与少量基础组件，再由真实页面驱动扩展；不为尚未出现的组件建立抽象。
+                </p>
+              </div>
+            </div>
+
+            <div class="spec-table-wrap">
+              <table class="spec-table">
+                <thead><tr><th>层级</th><th>建议落点</th><th>约束</th></tr></thead>
+                <tbody>
+                  <tr><td>设计令牌</td><td><code>src/web/src/styles/tokens.css</code></td><td>组件禁止直接写品牌色；优先使用语义变量</td></tr>
+                  <tr><td>全局样式</td><td><code>src/web/src/styles/global.css</code></td><td>只包含 reset、排版、主题和可访问性基础</td></tr>
+                  <tr><td>基础组件</td><td><code>src/web/src/components/ui/</code></td><td>由页面需求产生；支持 default / hover / focus / disabled / error</td></tr>
+                  <tr><td>图片上传</td><td><code>src/web/src/features/media/</code></td><td>状态进入 Redux；文件对象与临时预览不做持久化</td></tr>
+                  <tr><td>页面布局</td><td><code>src/web/src/layouts/</code></td><td>读者端与管理端可共享令牌，不强行共享布局结构</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="do-not" style="border-left-color: var(--success); background: var(--success-soft)">
+              <strong>完成定义：</strong>组件通过键盘操作、浅深色、360px / 768px / 1440px 三档检查；页面无横向意外溢出；文字和状态不依赖图片才能理解。
+            </div>
+          </section>
+
+          <footer class="footer">
+            <span>hxy.blog 视觉设计手册 · 工作名称可替换</span>
+            <span>参考方法：DeepSeek Harness UI/UX · 非官方关联</span>
+          </footer>
+        </div>
+      </main>
+    </div>
+
+    <script>
+      // 默认尊重系统主题；用户手动切换后，只在当前手册会话内保持选择。
+      const root = document.documentElement;
+      const themeToggle = document.querySelector("#themeToggle");
+      const themeIcon = document.querySelector("#themeIcon");
+      const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const requestedTheme = new URLSearchParams(window.location.search).get("theme");
+
+      function applyTheme(theme) {
+        root.dataset.theme = theme;
+        themeIcon.textContent = theme === "dark" ? "☀" : "◐";
+        themeToggle.setAttribute("aria-label", theme === "dark" ? "切换为浅色主题" : "切换为深色主题");
+      }
+
+      // 查询参数用于设计评审时直接分享指定主题，例如 ?theme=dark。
+      applyTheme(
+        requestedTheme === "dark" || requestedTheme === "light"
+          ? requestedTheme
+          : systemPrefersDark
+            ? "dark"
+            : "light",
+      );
+
+      themeToggle.addEventListener("click", () => {
+        applyTheme(root.dataset.theme === "dark" ? "light" : "dark");
+      });
+
+      // 滚动时同步目录状态，帮助读者确认当前章节位置。
+      const sections = [...document.querySelectorAll(".section")];
+      const navLinks = [...document.querySelectorAll(".nav-link")];
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const visible = entries.find((entry) => entry.isIntersecting);
+          if (!visible) return;
+
+          navLinks.forEach((link) => {
+            link.classList.toggle("is-active", link.getAttribute("href") === `#${visible.target.id}`);
+          });
+        },
+        { rootMargin: "-20% 0px -68%", threshold: 0 },
+      );
+
+      sections.forEach((section) => observer.observe(section));
+    </script>
+  </body>
+</html>
