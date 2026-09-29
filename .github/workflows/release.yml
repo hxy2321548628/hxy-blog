@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  # 只有 main 的 CI 完成后才考虑发布，避免 Release 与 CI 并发竞速。
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# 同一时间只允许一个镜像发布；旧发布不强制取消，避免留下半套镜像。
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+# Release 只需要读取源码并向 GHCR 写入镜像。
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    # 只接受由 main push 触发且成功的 CI，不处理手工或 PR 运行。
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API_IMAGE: ghcr.io/${{ github.repository_owner }}/hxy-blog-api
+      WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/hxy-blog-web
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      # 必须检出通过 CI 的精确提交，不能隐式使用此时的 main HEAD。
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: 登录 GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: 构建 linux/amd64 镜像
+        run: |
+          set -eu
+          immutable_tag="sha-${HEAD_SHA}"
+
+          docker build \
+            --platform linux/amd64 \
+            --build-arg VERSION="$immutable_tag" \
+            --build-arg REVISION="$HEAD_SHA" \
+            --tag "${API_IMAGE}:${immutable_tag}" \
+            --tag "${API_IMAGE}:main" \
+            src/backend
+
+          docker build \
+            --platform linux/amd64 \
+            --build-arg VERSION="$immutable_tag" \
+            --build-arg REVISION="$HEAD_SHA" \
+            --tag "${WEB_IMAGE}:${immutable_tag}" \
+            --tag "${WEB_IMAGE}:main" \
+            src/web
+
+      - name: 推送不可变镜像和 main 指针
+        run: |
+          set -eu
+          immutable_tag="sha-${HEAD_SHA}"
+
+          # 先发布两个不可变版本，再更新便于查看的 main 浮动标签。
+          docker push "${API_IMAGE}:${immutable_tag}"
+          docker push "${WEB_IMAGE}:${immutable_tag}"
+          docker push "${API_IMAGE}:main"
+          docker push "${WEB_IMAGE}:main"
+
+      - name: 记录发布 Digest
+        run: |
+          set -eu
+          immutable_tag="sha-${HEAD_SHA}"
+          api_digest="$(docker buildx imagetools inspect "${API_IMAGE}:${immutable_tag}" | awk '$1 == "Digest:" { print $2; exit }')"
+          web_digest="$(docker buildx imagetools inspect "${WEB_IMAGE}:${immutable_tag}" | awk '$1 == "Digest:" { print $2; exit }')"
+
+          test -n "$api_digest"
+          test -n "$web_digest"
+
+          {
+            echo '## GHCR 发布结果'
+            echo
+            echo '| 镜像 | Commit 标签 | Digest |'
+            echo '| --- | --- | --- |'
+            echo "| API | \`${immutable_tag}\` | \`${api_digest}\` |"
+            echo "| Web | \`${immutable_tag}\` | \`${web_digest}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
