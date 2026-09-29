@@ -1,0 +1,36 @@
+name: 用户故事
+description: 提交一个可在 1–2 天内验收的需求
+title: "[Story]: "
+labels: ["type: feature"]
+body:
+  - type: textarea
+    id: story
+    attributes:
+      label: 用户故事
+      description: 作为谁，希望什么，以便获得什么价值？
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 使用 Given / When / Then 或可观测结果。
+    validations:
+      required: true
+  - type: textarea
+    id: non-goals
+    attributes:
+      label: 非目标
+      description: 本故事明确不做什么？
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: 风险等级
+      options:
+        - 低
+        - 中
+        - 高
+    validations:
+      required: true
