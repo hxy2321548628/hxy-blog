@@ -262,14 +262,15 @@ SCP 不是日常发布方式，只在 GHCR 长时间不可用且必须恢复服�
 
 负面影响：依赖 GitHub Actions 和 GHCR；需要维护受限部署入口、备份和恢复演练；单实例发布仍可能产生短暂中断；数据库回退无法完全自动化。
 
-## 开放项
+## 已关闭的实施参数
 
-- 用户现有 MySQL、反向代理和基础镜像的完整名称与不可变版本/Digest。
-- 服务器正式部署目录、专用部署用户名和 SSH 端口。
-- GitHub `production` Environment 是否要求每次人工批准。
-- 备案完成时间，以及正式 DNS、TLS 和公安备案执行时间。
+- MySQL 使用 `mysql:8.0@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b`；Go、Alpine、Node 和 Nginx 构建/运行镜像均在各 Dockerfile 中固定 Digest。
+- 生产目录为 `/opt/hxy-blog`，专用部署用户为 `hxy-deploy`，SSH 端口为 `22`；个人用户 `ubuntu` 不作为流水线部署身份。
+- GitHub `production` Environment 每次部署都要求人工批准，只有受保护的 `main` 可以触发。
+- 正式站点使用 `hxy2333.site`，媒体使用 `media.hxy2333.site`。ICP 备案通过前不得通过公网域名或公网 IP 提供网站访问，只允许服务器回环地址和 SSH 隧道验证。
+- 备案完成日期、DNS 生效时间、TLS 证书和公安备案属于正式开放阶段的外部门禁，不阻塞 Sprint 0 工程基线，也不得在备案完成前提前执行。
 
-这些开放项不影响采用 GHCR 的架构决策，但必须在对应实施阶段开始前确认。
+Sprint 0 的构建、推送、部署、健康检查、自动应用回滚、COS 异地备份和隔离库恢复均已完成验证，证据记录在 [`Sprint 0 验收记录`](../engineering/sprint-0-acceptance.md)。
 
 ## 参考
 
