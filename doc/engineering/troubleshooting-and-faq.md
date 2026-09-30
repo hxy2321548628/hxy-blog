@@ -23,15 +23,39 @@
 
 **沉淀的认知**：规范要有**服务端强制**才成立；本地约束只是辅助。
 
-### 2. GolangCI 类型检查导致 `go.sum` 缓存告警
+### 2. `go.sum` 缓存路径不匹配导致缓存恢复失败
 
-**现象**：CI 出现“没有 go.sum 导致 Go 缓存恢复提示”的非阻断警告。
+**现象**：CI 中反复出现非阻断警告：
 
-**根因**：`setup-go` 的 `cache: true` 在依赖清单尚未完整时无法正确计算缓存键。
+```text
+Restore cache failed: Dependencies file is not found in
+/home/runner/work/hxy-blog/hxy-blog. Supported file pattern: go.sum
+```
 
-**解决**：不忽略——补齐 `go.sum` 并使依赖清单随代码一起提交。后续 CI 缓存恢复正常。
+**根因**：`actions/setup-go` 的 `cache: true` 默认在**仓库根目录**查找 `go.sum`，但本项目的 Go 模块在 `src/backend/`：
 
-**沉淀的认知**：CI 的“警告”不能长期挂着。警告会训练人忽略输出，等到真错误出现时也被一起忽略。
+```text
+src/backend/go.sum          ← 依赖清单的真实位置
+./go.sum                    ← setup-go 默认查找的位置（不存在）
+```
+
+所以不是“缺少 go.sum”，而是**缓存键的查找路径不对**。这解释了为什么这个警告在依赖清单早已提交后依然存在。
+
+**影响**：仅导致 Go 依赖缓存无法命中，每次 CI 都要重新下载模块（浪费时间，不影响正确性）。属于**待修复项**。
+
+**修复方向**（本 PR 只记录，不改工作流）：
+
+```yaml
+- uses: actions/setup-go@v5
+  with:
+    go-version-file: src/backend/go.mod
+    cache: true
+    cache-dependency-path: src/backend/go.sum   # 显式指定
+```
+
+注意前端那一步已经正确处理了同类问题：`setup-node` 显式写了 `cache-dependency-path: src/web/package-lock.json`。Go 这步缺了对应配置——**同一个工作流里两个工具，一个配了一个没配**。
+
+**沉淀的认知**：默认值只在“目录结构符合默认假设”时成立。仓库使用子目录布局时，所有按路径推断的配置都要显式声明。同时，非阻断警告要记录并排期修复，因为警告会训练人忽略 CI 输出。
 
 ### 3. GitHub Actions 的 Node.js 20 运行时弃用警告
 

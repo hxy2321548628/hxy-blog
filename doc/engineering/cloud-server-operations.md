@@ -353,7 +353,7 @@ RandomizedDelaySec=10min
 | --- | --- |
 | `Asia/Shanghai` | 明确时区，避免服务器 UTC 导致凌晨误跑 |
 | `Persistent=true` | 关机错过的任务在下次开机后补跑 |
-| `RandomizedDelaySec=10min` | 抖动，避免整点资源争抢 |
+| `RandomizedDelaySec=10min` | 在 0–10 分钟内随机抖动，避免整点资源争抢 |
 | `Nice=10`、`IOSchedulingClass=best-effort` | 降低优先级，不影响线上服务 |
 
 `hxy-blog-db-backup-current` 包装脚本有个好习惯：**不 `source` 环境文件**（那会把整份文件当代码执行），只用 `sed` 提取并严格校验 `APP_REVISION`：
