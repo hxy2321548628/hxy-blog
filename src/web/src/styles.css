@@ -1,5 +1,4 @@
 :root {
-  /* 全局使用温暖纸张色和衬线正文，系统字体作为中文可用性回退。 */
   color: #26251f;
   background: #f4f0e7;
   font-family: Georgia, 'Noto Serif SC', serif;
@@ -8,7 +7,6 @@
 }
 
 * {
-  /* width/height 包含 padding 与 border，响应式尺寸更容易推导。 */
   box-sizing: border-box;
 }
 
@@ -18,11 +16,19 @@ body {
   min-height: 100vh;
 }
 
+button {
+  font: inherit;
+}
+
 .shell {
-  /* 内容最大 720px，小屏始终保留左右各 24px 的呼吸空间。 */
-  width: min(720px, calc(100% - 48px));
+  width: min(760px, calc(100% - 48px));
   margin: 0 auto;
-  padding: 18vh 0 80px;
+  padding: 96px 0 80px;
+}
+
+.hero {
+  padding-bottom: 72px;
+  border-bottom: 1px solid #d8d1c2;
 }
 
 .eyebrow {
@@ -35,42 +41,115 @@ body {
 h1 {
   max-width: 680px;
   margin: 0;
-  /* clamp 在小屏、流式区间和大屏之间限制字号，避免额外媒体查询。 */
-  font-size: clamp(2.75rem, 8vw, 5.75rem);
+  font-size: clamp(2.75rem, 8vw, 5.25rem);
   font-weight: 500;
-  line-height: 0.98;
+  line-height: 1.02;
   letter-spacing: -0.04em;
 }
 
 .summary {
-  max-width: 550px;
-  margin: 40px 0;
+  max-width: 560px;
+  margin: 32px 0 0;
   color: #625f55;
   font: 1.05rem/1.8 system-ui, sans-serif;
 }
 
-.status {
-  /* 状态文案与圆点作为一个行内整体，内容增加时仍保持垂直居中。 */
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
+section {
+  padding-top: 56px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 8px;
+}
+
+.section-heading h2 {
   margin: 0;
+  font-size: 1rem;
+  font-family: system-ui, sans-serif;
+  letter-spacing: 0.08em;
+}
+
+.section-heading span,
+.post-list time {
+  color: #7c786d;
+  font: 0.8rem/1.5 system-ui, sans-serif;
+}
+
+.post-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.post-list__item {
+  border-bottom: 1px solid #d8d1c2;
+}
+
+.post-list__item article {
+  padding: 32px 0 36px;
+}
+
+.post-list h2 {
+  margin: 10px 0 0;
+  font-size: clamp(1.5rem, 4vw, 2.15rem);
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.empty-state,
+.request-state {
+  margin: 28px 0 0;
+  padding: 28px 0;
   color: #625f55;
+  font: 1rem/1.7 system-ui, sans-serif;
+}
+
+.request-state--error {
+  color: #8a352f;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 36px;
   font: 0.875rem/1.5 system-ui, sans-serif;
 }
 
-.status span {
-  /* 默认黄色代表“检查中”，后续修饰类只覆盖颜色。 */
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #c79636;
+.pagination button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid #aaa18f;
+  border-radius: 999px;
+  color: #3b3932;
+  background: transparent;
+  cursor: pointer;
 }
 
-.status--online span {
-  background: #397a56;
+.pagination button:hover:not(:disabled),
+.pagination button:focus-visible {
+  border-color: #9c4f2f;
+  color: #9c4f2f;
 }
 
-.status--offline span {
-  background: #a53f37;
+.pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@media (max-width: 600px) {
+  .shell {
+    width: min(100% - 36px, 760px);
+    padding-top: 64px;
+  }
+
+  .hero {
+    padding-bottom: 52px;
+  }
 }

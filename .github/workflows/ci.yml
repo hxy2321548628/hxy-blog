@@ -75,7 +75,7 @@ jobs:
           set -a
           . ./.env.example
           set +a
-          go -C src/backend test -tags=integration ./internal/migrations -count=1
+          go -C src/backend test -tags=integration ./internal/migrations ./internal/post -count=1
 
           # down 后再次 up，证明迁移具备最小可回滚性且能重新应用。
           docker compose --env-file .env.example -f deploy/compose.yaml \

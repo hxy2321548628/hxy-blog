@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 
 # .PHONY 表示这些名称是“动作”而不是文件；即使目录中出现同名文件也会执行。
-.PHONY: help setup fmt fmt-check vet test test-go check check-web check-deploy container-config container-production-config container-build container-up container-down dev-backend dev-migrate dev-web dev-db
+.PHONY: help setup fmt fmt-check vet test test-go test-web check check-web check-deploy container-config container-production-config container-build container-up container-down dev-backend dev-migrate dev-web dev-db
 
 # 集中声明路径和 Compose 命令，后续目标只组合这些变量。
 WEB_DIR := src/web
@@ -33,7 +33,8 @@ help:
 		'  make fmt-check                    检查 Go 格式但不修改文件' \
 		'  make vet                          运行 Go 静态检查' \
 		'  make test-go                      运行 Go 测试' \
-		'  make test                         运行全部测试（当前等同 test-go）' \
+		'  make test-web                     运行 React 组件测试' \
+		'  make test                         运行全部测试' \
 		'  make check-web                    检查并构建 React 前端' \
 		'  make check-deploy                 检查部署脚本、文件名和 CAM JSON' \
 		'  make check                        运行提交前完整质量门禁' \
@@ -65,8 +66,12 @@ vet:
 test-go:
 	go -C src/backend test ./...
 
-# 保留统一 test 入口；未来增加跨端测试时可继续扩展依赖列表。
-test: test-go
+# 组件测试使用 Node 环境静态渲染，不需要启动浏览器或开发服务器。
+test-web:
+	npm --prefix $(WEB_DIR) test
+
+# 统一 test 入口同时覆盖前后端，CI 与本地不会漏掉任一侧。
+test: test-go test-web
 
 # 前端 check 会依次执行 ESLint、TypeScript 类型检查和生产构建。
 check-web:

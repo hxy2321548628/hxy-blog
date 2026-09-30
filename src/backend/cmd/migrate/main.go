@@ -6,14 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"os"
-	"strconv"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/pressly/goose/v3"
 
+	dbconfig "hxy-blog/backend/internal/database"
 	"hxy-blog/backend/internal/migrations"
 )
 
@@ -34,7 +32,7 @@ func run(args []string, getenv func(string) string) error {
 		return errors.New("command must be exactly one of: up, down")
 	}
 
-	config, err := databaseConfig(getenv)
+	config, err := dbconfig.MySQLConfig(getenv)
 	if err != nil {
 		return err
 	}
@@ -74,57 +72,4 @@ func run(args []string, getenv func(string) string) error {
 	}
 
 	return nil
-}
-
-func databaseConfig(getenv func(string) string) (*mysql.Config, error) {
-	// required 统一实现“缺失即失败”，错误信息只包含变量名，不包含敏感值。
-	required := func(key string) (string, error) {
-		value := getenv(key)
-		if value == "" {
-			return "", fmt.Errorf("missing required environment variable %s", key)
-		}
-		return value, nil
-	}
-
-	host, err := required("MYSQL_HOST")
-	if err != nil {
-		return nil, err
-	}
-	port, err := required("MYSQL_PORT")
-	if err != nil {
-		return nil, err
-	}
-	// 先把端口转为整数并检查网络端口范围，避免把无效地址交给驱动后才失败。
-	portNumber, err := strconv.Atoi(port)
-	if err != nil || portNumber < 1 || portNumber > 65535 {
-		return nil, errors.New("MYSQL_PORT must be an integer between 1 and 65535")
-	}
-	name, err := required("MYSQL_DATABASE")
-	if err != nil {
-		return nil, err
-	}
-	user, err := required("MYSQL_USER")
-	if err != nil {
-		return nil, err
-	}
-	password, err := required("MYSQL_PASSWORD")
-	if err != nil {
-		return nil, err
-	}
-
-	// 使用驱动提供的 Config 生成 DSN，避免用户名或密码中的特殊字符被手工拼接破坏。
-	config := mysql.NewConfig()
-	config.User = user
-	config.Passwd = password
-	config.Net = "tcp"
-	config.Addr = net.JoinHostPort(host, port)
-	config.DBName = name
-	// 与 MySQL 容器配置保持一致；ParseTime 让日期时间字段解析为 time.Time。
-	config.Collation = "utf8mb4_0900_ai_ci"
-	config.ParseTime = true
-	// 分别限制建连、读取和写入，网络故障时迁移可在可预测时间内失败。
-	config.Timeout = 10 * time.Second
-	config.ReadTimeout = 30 * time.Second
-	config.WriteTimeout = 30 * time.Second
-	return config, nil
 }
