@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 
 # .PHONY 表示这些名称是“动作”而不是文件；即使目录中出现同名文件也会执行。
-.PHONY: help setup fmt fmt-check vet test test-go check check-web check-deploy container-config container-production-config container-build container-up container-down dev-backend dev-web dev-db
+.PHONY: help setup fmt fmt-check vet test test-go check check-web check-deploy container-config container-production-config container-build container-up container-down dev-backend dev-migrate dev-web dev-db
 
 # 集中声明路径和 Compose 命令，后续目标只组合这些变量。
 WEB_DIR := src/web
@@ -24,6 +24,7 @@ help:
 		'  make help                         显示本帮助（默认目标）' \
 		'  make setup                        按锁文件安装前端依赖' \
 		'  make dev-db                       启动本地 MySQL' \
+		'  make dev-migrate                  对本地 MySQL 执行 Goose up' \
 		'  make dev-backend                  启动 Go API' \
 		'  make dev-web                      启动 React 开发服务器' \
 		'' \
@@ -94,17 +95,25 @@ check-deploy:
 container-build:
 	$(COMPOSE_EXAMPLE) build
 
-# 开发栈会构建当前源码并在后台启动；数据库数据保存在命名卷中。
+# 开发栈先等待 MySQL，再执行编译进当前 API 镜像的迁移，
+# 避免新数据卷出现“容器健康但业务表不存在”的假就绪状态。
 container-up:
-	$(COMPOSE_LOCAL) up -d --build
+	$(COMPOSE_LOCAL) build api web
+	$(COMPOSE_LOCAL) up -d mysql --wait
+	$(COMPOSE_LOCAL) run --rm --no-deps --entrypoint /app/migrate api up
+	$(COMPOSE_LOCAL) up -d api web
 
 # down 删除容器和网络，但不带 --volumes，因此不会删除本地 MySQL 数据。
 container-down:
 	$(COMPOSE_LOCAL) down
 
-# 以下三个目标用于不启动完整栈时的单组件开发。
+# 以下目标用于不启动完整栈时的单组件开发。
+# 宿主机开发也共用 .env，不要求开发者再手工导出一遍数据库变量。
 dev-backend:
-	go -C src/backend run ./cmd/api
+	bash -c 'set -a; source .env; set +a; exec go -C src/backend run ./cmd/api'
+
+dev-migrate:
+	bash -c 'set -a; source .env; set +a; exec go -C src/backend run ./cmd/migrate up'
 
 dev-web:
 	npm --prefix $(WEB_DIR) run dev

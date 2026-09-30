@@ -11,8 +11,10 @@ FROM ${GO_IMAGE} AS builder
 WORKDIR /src
 
 # 先复制依赖清单，业务代码变化时可复用依赖缓存层。
+ARG GO_MODULE_PROXY=https://proxy.golang.org,direct
 COPY go.mod go.sum ./
-RUN go mod download
+# 代理只影响构建阶段；国内开发机可通过 Compose 变量覆盖，不进入运行时镜像。
+RUN GOPROXY="${GO_MODULE_PROXY}" go mod download
 
 COPY . .
 # CGO_ENABLED=0 生成不依赖系统 C 库的二进制；trimpath 去除构建机路径，

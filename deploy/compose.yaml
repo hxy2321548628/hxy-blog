@@ -44,6 +44,8 @@ services:
       args:
         VERSION: ${APP_VERSION:-dev}
         REVISION: ${APP_REVISION:-local}
+        # 仅在 Docker 构建阶段使用，便于开发机选择可达的 Go 模块镜像源。
+        GO_MODULE_PROXY: ${GO_MODULE_PROXY:-https://proxy.golang.org,direct}
     environment:
       HTTP_ADDR: :8080
       MYSQL_HOST: mysql
