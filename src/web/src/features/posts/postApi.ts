@@ -27,6 +27,13 @@ export interface PostListResponse {
   total: number
 }
 
+export interface PostDetailResponse {
+  slug: string
+  title: string
+  contentMarkdown: string
+  publishedAt: string
+}
+
 interface ListPostsParams {
   page: number
   pageSize: number
@@ -86,7 +93,13 @@ export const postApi = createApi({
         params: { page, pageSize },
       }),
     }),
+    getPost: builder.query<PostDetailResponse, string>({
+      query: (slug) => ({
+        url: `/posts/${encodeURIComponent(slug)}`,
+        method: 'GET',
+      }),
+    }),
   }),
 })
 
-export const { useListPostsQuery } = postApi
+export const { useGetPostQuery, useListPostsQuery } = postApi
