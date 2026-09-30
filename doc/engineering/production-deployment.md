@@ -13,6 +13,9 @@ GitHub Actions 只能通过专用 SSH 密钥调用固定部署入口，不能获
 | 运行时密钥 | `/etc/hxy-blog/runtime.env`，root:root `0600` |
 | 固定 SSH 入口 | `/usr/local/sbin/hxy-blog-ssh-entry` |
 | root 部署入口 | `/usr/local/sbin/hxy-blog-deploy` |
+| root 备份入口 | `/usr/local/sbin/hxy-blog-db-backup` |
+| root 恢复演练入口 | `/usr/local/sbin/hxy-blog-db-restore-drill` |
+| 即时备份目录 | `/var/backups/hxy-blog/mysql`，root:root `0700` |
 | 生产端口 | 仅 `127.0.0.1:8080`，备案完成前不开放 80/443 |
 
 部署公钥必须使用 `restrict` 和强制命令：
@@ -42,11 +45,30 @@ Environment 只允许受保护的 `main` 分支部署，并要求人工批准。
 1. `main` CI 成功后，Release 构建并推送两个不可变 GHCR 镜像。
 2. GitHub 等待 `production` Environment 人工批准。
 3. 服务器先拉取两个 Digest，不改动当前版本。
-4. 保存当前 `release.env` 为 `previous.env`，再切换镜像。
-5. 等待 Compose 健康并检查本机 Web/API 健康接口。
-6. 失败时恢复 `previous.env`；首次部署失败则停止应用，但保留 MySQL 命名卷。
+4. 确保 MySQL 健康，创建 `mysqldump` 逻辑备份并校验压缩文件。
+5. 使用候选 API 镜像中与 Commit 一致的迁移二进制执行 Goose `up`。
+6. 备份或迁移失败时停止发布，旧应用继续运行。
+7. 保存当前 `release.env` 为 `previous.env`，再切换镜像。
+8. 等待 Compose 健康并检查本机 Web/API 健康接口。
+9. 失败时恢复 `previous.env`；首次部署失败则停止应用，但保留 MySQL 命名卷。
 
-应用回滚不会自动执行数据库 down migration。当前应用尚无数据库 Schema，Release 会拒绝包含迁移文件的版本；在首个 Goose 迁移进入仓库前，必须先补齐部署前备份、Goose up 和恢复演练。
+应用回滚不会自动执行数据库 down migration。Schema 必须采用先扩展、后收缩的兼容迁移；需要回退数据库时由管理员评估数据兼容性后单独处理。
+
+## 备份和恢复演练
+
+- 每次部署在 Goose `up` 前创建一份 root 专属的 gzip 逻辑备份和 SHA-256 校验文件。
+- 单机目录只保留最近七份即时备份；被轮换的旧文件无法从服务器恢复。
+- 即时备份不能替代异机备份，正式公网开放前仍需接入服务器之外的加密存储。
+- 恢复演练只导入固定隔离库 `hxy_blog_restore_drill`，完成校验后自动删除，不覆盖生产库。
+
+管理员可在服务器执行：
+
+```bash
+sudo /usr/local/sbin/hxy-blog-db-restore-drill \
+  /var/backups/hxy-blog/mysql/<backup>.sql.gz
+```
+
+演练会先验证 SHA-256 和 gzip 完整性，再输出恢复后的表数量和 Goose 版本。生产库的破坏性恢复不通过 GitHub 部署密钥开放，也不在无人值守脚本中自动执行。
 
 ## 备案期限制
 

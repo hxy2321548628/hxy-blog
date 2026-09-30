@@ -36,7 +36,7 @@ container-production-config:
 	docker compose --env-file .env.example -f deploy/compose.production.yaml config --quiet
 
 check-deploy:
-	bash -n deploy/scripts/deploy.sh deploy/scripts/ssh-entry.sh
+	bash -n deploy/scripts/deploy.sh deploy/scripts/ssh-entry.sh deploy/scripts/backup-db.sh deploy/scripts/restore-drill.sh
 
 container-build:
 	$(COMPOSE_EXAMPLE) build

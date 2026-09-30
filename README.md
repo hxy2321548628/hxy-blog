@@ -46,6 +46,8 @@ make check
 
 该命令会检查 Go 格式、运行 `go vet` 和测试，并完成前端 lint 与生产构建。
 
+数据库 Schema 使用 Goose 迁移，不使用 GORM `AutoMigrate`。迁移编译在 API 镜像的 `/app/migrate` 中，CI 会针对真实 MySQL 验证 `up`、重复 `up` 和 `down`；生产部署固定执行“备份成功后再 `up`”。
+
 ## 工程规范
 
 从 [AGENTS.md](./AGENTS.md) 开始阅读。它会引导人和 AI 找到技术章程、代码规范、Git 规范、敏捷流程和架构决策。

@@ -52,12 +52,6 @@ jobs:
           set -eu
           immutable_tag="sha-${HEAD_SHA}"
 
-          # Goose 尚未接入部署流程前，禁止静默发布任何迁移文件。
-          if [ -d src/backend/migrations ] && find src/backend/migrations -type f -print -quit | grep --quiet .; then
-            echo '检测到数据库迁移，但部署前备份与 Goose 门禁尚未实现。' >&2
-            exit 1
-          fi
-
           docker build \
             --platform linux/amd64 \
             --build-arg VERSION="$immutable_tag" \

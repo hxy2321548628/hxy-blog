@@ -9,6 +9,7 @@ readonly RUNTIME_ENV=/etc/hxy-blog/runtime.env
 readonly RELEASE_ENV="${APP_DIR}/release.env"
 readonly PREVIOUS_ENV="${APP_DIR}/previous.env"
 readonly LOCK_FILE=/run/lock/hxy-blog-deploy.lock
+readonly BACKUP_SCRIPT=/usr/local/sbin/hxy-blog-db-backup
 readonly API_REPOSITORY=ghcr.io/hxy2321548628/hxy-blog-api
 readonly WEB_REPOSITORY=ghcr.io/hxy2321548628/hxy-blog-web
 
@@ -46,6 +47,8 @@ fi
 command -v docker >/dev/null || fail '未安装 Docker'
 command -v curl >/dev/null || fail '未安装 curl'
 command -v flock >/dev/null || fail '未安装 flock'
+[[ -x ${BACKUP_SCRIPT} ]] || fail "缺少 ${BACKUP_SCRIPT}"
+[[ $(stat -c '%u' "${BACKUP_SCRIPT}") == 0 ]] || fail "${BACKUP_SCRIPT} 必须由 root 拥有"
 
 exec 9>"${LOCK_FILE}"
 flock -n 9 || fail '已有部署正在执行'
@@ -87,6 +90,11 @@ rollback() {
 
 # 拉取失败不会改动当前 release.env，也不会影响正在运行的版本。
 compose_with_env "${candidate_env}" pull api web
+
+# 迁移前先确保 MySQL 健康并创建逻辑备份。任一步失败都不会切换应用镜像。
+compose_with_env "${candidate_env}" up -d mysql --wait --wait-timeout 120
+"${BACKUP_SCRIPT}" "${revision}"
+compose_with_env "${candidate_env}" run --rm --no-deps --entrypoint /app/migrate api up
 
 if [[ -f ${RELEASE_ENV} ]]; then
   install -o root -g root -m 600 "${RELEASE_ENV}" "${PREVIOUS_ENV}"

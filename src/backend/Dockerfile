@@ -9,11 +9,12 @@ FROM ${GO_IMAGE} AS builder
 WORKDIR /src
 
 # 先复制依赖清单，业务代码变化时可复用依赖缓存层。
-COPY go.mod ./
+COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate
 
 FROM ${RUNTIME_IMAGE} AS runtime
 
@@ -28,6 +29,7 @@ LABEL org.opencontainers.image.title="hxy-blog-api" \
 # Go 访问 COS 等 HTTPS 服务时需要系统根证书；证书随固定构建镜像一起版本化。
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /out/api /app/api
+COPY --from=builder /out/migrate /app/migrate
 
 ENV HTTP_ADDR=:8080
 
