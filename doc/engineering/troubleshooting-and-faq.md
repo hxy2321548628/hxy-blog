@@ -174,7 +174,44 @@ flock -n 9 || fail '已有数据库备份正在执行'
 
 **沉淀的认知**：单机上任何会修改共享状态的定时任务，都要有锁。
 
-### 10. 文档状态与实现状态脱节
+### 10. `coscli ls` 返回 403，但备份其实是好的
+
+**现象**：想确认备份是否在 COS 上，执行列举命令却报权限拒绝：
+
+```bash
+sudo coscli ls cos://hxy-backup/mysql/ --config-path /etc/hxy-blog/cos-backup.yaml --bucket-type COS
+# 403 AccessDenied(Message: Access Denied.)
+```
+
+即使把前缀写到精确的对象名，依然 403。
+
+**根因**：`coscli ls` 无论前缀多精确，走的都是 `ListObjects` 接口。而 CAM 策略**没有授予列举权限**：
+
+```json
+"action": [
+  "name/cos:PutObject", "name/cos:HeadObject", "name/cos:GetObject",
+  "name/cos:InitiateMultipartUpload", "name/cos:ListMultipartUploads",
+  "name/cos:ListParts", "name/cos:UploadPart",
+  "name/cos:CompleteMultipartUpload", "name/cos:AbortMultipartUpload"
+]
+```
+
+注意这里有 `ListMultipartUploads`、`ListParts`（分片上传内部需要）和 `HeadObject`、`GetObject`，**唯独没有 `ListObjects`**。所以这是**最小权限设计生效**，不是备份故障。
+
+**怎么正确核验**：用需要 `GetObject` 的路径，而不是列举。
+
+```bash
+# 备份脚本内部回读校验用的就是 GetObject 语义的下载
+sudo /usr/local/sbin/hxy-blog-db-fetch <规范备份文件名>.sql.gz
+```
+
+更强的证据是**部署脚本的顺序**：`备份（含 COS 上传 + 回读 + SHA-256 校验）` 成功之后才会执行迁移和应用切换。所以只要部署整体报“部署成功”，就证明 COS 上传与回读校验都已通过——`hxy-blog-db-sync` 任何一步失败都会让整个部署中止。
+
+**排查心法**：看到 403 先分清是**对象级**还是**桶级**操作。`GetObject`/`HeadObject` 是对象级（策略按前缀授予），`ListObjects` 是桶级列举（本策略有意不授予）。不要把“设计上不允许”误判成“配置坏了”。
+
+**沉淀的认知**：最小权限会让某些**探索性**命令必然失败，这是特性而非缺陷。核验手段要选策略允许的那条路径，而不是绕过或放宽策略。
+
+### 11. 文档状态与实现状态脱节
 
 **现象**：Sprint 0 后期 Backlog 仍显示 MySQL、CD、服务器部署未完成，但实际早已完成。
 
@@ -268,6 +305,9 @@ V1 是单实例替换发布，容器切换期间有短暂不可用。这是为�
 
 **Q20：COS 备份为什么没有删除权限？**
 因为“能删备份的凭据”会削弱备份的意义。CAM 策略只授予上传/读取/分片相关权限，资源限定到 `mysql/*`；**保留与删除交给 COS 生命周期规则**（90 天）。这样即使服务器被攻破，历史备份也删不掉。
+
+**Q20b：为什么 `coscli ls` 列不出备份，报 403？**
+因为策略**故意没给 `ListObjects`**（列举是桶级操作）。`coscli ls` 只能走列举接口，所以必然被拒。但备份的上传、回读、取回用的是 `PutObject`/`HeadObject`/`GetObject`（对象级操作，按 `mysql/*` 前缀授权），这些是允许的。要核验备份是否存在，用 `hxy-blog-db-fetch` 取回，或直接看部署是否成功——部署里的备份步骤成功了才可能走到应用切换。详见排错记录第 10 条。
 
 **Q21：备份文件为什么要在上传后立刻回读？**
 为了在同一次任务里证明“**可上传**”并且“**可恢复**”。很多备份事故的真实形态是：文件安静地躺了半年，出事时发现读不回来。
