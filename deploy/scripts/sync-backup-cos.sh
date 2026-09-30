@@ -22,7 +22,7 @@ if [[ $# -ne 1 ]]; then
   fail '参数必须是备份文件绝对路径'
 fi
 
-for command_name in cmp cut find gzip mktemp realpath sha256sum stat; do
+for command_name in cmp cut find grep gzip mktemp realpath sha256sum stat; do
   command -v "${command_name}" >/dev/null || fail "缺少命令 ${command_name}"
 done
 
@@ -36,6 +36,8 @@ done
 if [[ -n $(find "${COS_CONFIG}" -maxdepth 0 -perm /077 -print) ]]; then
   fail "${COS_CONFIG} 权限必须不高于 600"
 fi
+grep -Fq '    mode: SecretKey' "${COS_CONFIG}" || fail 'COSCLI 未配置专用 CAM 子用户'
+grep -Fq '    disableencryption: "false"' "${COS_CONFIG}" || fail 'COSCLI 密钥加密未启用'
 
 backup_path=$(realpath -e -- "$1") || fail '备份文件不存在'
 [[ ${backup_path} == "${BACKUP_DIR}/"* && ${backup_path} == *.sql.gz ]] ||

@@ -19,11 +19,12 @@ if [[ ${EUID} -ne 0 ]]; then
   fail '必须由 root 执行'
 fi
 
-if [[ $# -ne 1 || ! $1 =~ ^[0-9]{8}T[0-9]{6}Z-sha-[0-9a-f]{12}\.sql\.gz$ ]]; then
+# 兼容早期秒级时间戳和当前 GNU date 生成的 9 位纳秒时间戳。
+if [[ $# -ne 1 || ! $1 =~ ^[0-9]{8}T[0-9]{6}([0-9]{9})?Z-sha-[0-9a-f]{12}\.sql\.gz$ ]]; then
   fail '参数必须是 COS 中的备份文件名'
 fi
 
-for command_name in cut find flock gzip install mktemp sha256sum stat; do
+for command_name in cut find flock grep gzip install mktemp sha256sum stat; do
   command -v "${command_name}" >/dev/null || fail "缺少命令 ${command_name}"
 done
 
@@ -36,6 +37,8 @@ done
 if [[ -n $(find "${COS_CONFIG}" -maxdepth 0 -perm /077 -print) ]]; then
   fail "${COS_CONFIG} 权限必须不高于 600"
 fi
+grep -Fq '    mode: SecretKey' "${COS_CONFIG}" || fail 'COSCLI 未配置专用 CAM 子用户'
+grep -Fq '    disableencryption: "false"' "${COS_CONFIG}" || fail 'COSCLI 密钥加密未启用'
 
 exec 9>"${BACKUP_LOCK}"
 flock -n 9 || fail '数据库备份或其他恢复操作正在执行'

@@ -7,14 +7,15 @@
 
 ## 背景
 
-生产 MySQL 运行在单台 2C2G CVM 的 Docker 持久化卷中。已有部署前逻辑备份、SHA-256 校验和隔离库恢复演练，但备份与数据库位于同一台服务器，无法抵御系统盘或整台实例丢失。
+生产 MySQL 运行在单台 2C2G 轻量应用服务器 Lighthouse 的 Docker 持久化卷中。已有部署前逻辑备份、SHA-256 校验和隔离库恢复演练，但备份与数据库位于同一台服务器，无法抵御系统盘或整台实例丢失。
 
 ## 决策
 
 - 异地介质使用腾讯云 COS 私有存储桶 `hxy-blog-backup-1497610660`，地域为 `ap-nanjing`。
 - 备份只能写入和读取 `mysql/` 前缀，对应资源为 `qcs::cos:ap-nanjing:uid/1497610660:hxy-blog-backup-1497610660/mysql/*`。
-- CVM 绑定 `HxyBlogBackupRole` 实例角色，COSCLI 从实例元数据获取周期轮换的 STS 临时凭证。服务器、GitHub 和代码库都不保存 SecretId/SecretKey。
-- 角色只具有上传、读取、校验和分片上传所需权限，不授予 `DeleteObject`、`DeleteBucket` 或存储桶配置权限。
+- Lighthouse 不支持 CVM 实例角色。使用仅启用编程访问的专用 CAM 子用户 `hxy-blog-backup`，只关联 `HxyBlogBackupPolicy`。
+- SecretId/SecretKey 不进入 GitHub、代码库、命令行参数或日志，只保存在服务器 `/etc/hxy-blog/cos-backup.yaml`，权限为 root:root `0600`。
+- 子用户只具有上传、读取、校验和分片上传所需权限，不授予 `DeleteObject`、`DeleteBucket` 或存储桶配置权限。
 - 每份 `.sql.gz` 与对应 `.sha256` 一同上传，显式使用 SSE-COS AES-256，并禁止覆盖同名对象。
 - 每次上传后立即从 COS 回读，再检查 SHA-256 和 gzip 完整性。回读失败则整个备份任务失败。
 - 部署仍在 Goose 迁移前备份；新增 systemd timer 在每日 03:30（Asia/Shanghai）独立备份，最多随机延迟 10 分钟。
@@ -29,12 +30,13 @@
 
 ## 验收
 
-1. CVM 元数据可以识别 `HxyBlogBackupRole`，配置文件不含长期密钥。
-2. 手工执行一次备份，上传和回读校验成功。
-3. 从 COS 取回该备份，导入隔离数据库并输出表数和 Goose 版本。
-4. systemd timer 已启用，下次执行时间正确。
-5. 策略模拟器或实际授权中不包含对象删除权限。
+1. 专用 CAM 子用户没有控制台访问能力，且只关联 `HxyBlogBackupPolicy`。
+2. 密钥配置由 root 拥有且权限为 `0600`，代码库和日志中不出现密钥。
+3. 手工执行一次备份，上传和回读校验成功。
+4. 从 COS 取回该备份，导入隔离数据库并输出表数和 Goose 版本。
+5. systemd timer 已启用，下次执行时间正确。
+6. 策略模拟器或实际授权中不包含对象删除权限。
 
 ## 后果
 
-正面影响是备份与 CVM 故障域分离，且没有长期访问密钥。代价是 COS 或实例角色异常会阻止数据库迁移，并产生少量存储和请求费用。
+正面影响是备份与 Lighthouse 故障域分离，并通过专用子用户、前缀级最小权限和无删除权限限制密钥风险。代价是 Lighthouse 上必须保存长期密钥，需要人工轮换；COS 异常也会阻止数据库迁移，并产生少量存储和请求费用。
