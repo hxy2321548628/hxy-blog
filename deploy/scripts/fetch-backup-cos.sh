@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# 从 COS 取回指定备份及其校验文件，验证无误后写入本地受管目录。
+# 该脚本只“取回”，不会自动导入或覆盖生产数据库。
 set -Eeuo pipefail
 umask 077
 
@@ -20,6 +22,7 @@ if [[ ${EUID} -ne 0 ]]; then
 fi
 
 # 兼容早期秒级时间戳和当前 GNU date 生成的 9 位纳秒时间戳。
+# 文件名白名单也阻止路径穿越和任意 COS 对象读取。
 if [[ $# -ne 1 || ! $1 =~ ^[0-9]{8}T[0-9]{6}([0-9]{9})?Z-sha-[0-9a-f]{12}\.sql\.gz$ ]]; then
   fail '参数必须是 COS 中的备份文件名'
 fi
@@ -41,12 +44,14 @@ grep -Fq '    mode: SecretKey' "${COS_CONFIG}" || fail 'COSCLI 未配置专用 C
 grep -Fq '    disableencryption: "false"' "${COS_CONFIG}" || fail 'COSCLI 密钥加密未启用'
 
 exec 9>"${BACKUP_LOCK}"
+# 与备份/恢复共用互斥锁，避免同名文件在另一任务读取时被写入。
 flock -n 9 || fail '数据库备份或其他恢复操作正在执行'
 
 readonly archive_name=$1
 readonly checksum_name="${archive_name}.sha256"
 readonly archive_path="${BACKUP_DIR}/${archive_name}"
 readonly checksum_path="${BACKUP_DIR}/${checksum_name}"
+# 禁止覆盖本地同名文件；若内容不同，覆盖会破坏审计链。
 [[ ! -e ${archive_path} && ! -e ${checksum_path} ]] || fail '本地已存在同名备份'
 
 temporary_directory=$(mktemp -d)
@@ -63,6 +68,7 @@ cos_cp() {
     --fail-output=false
 }
 
+# 先下载到临时目录并完成双重校验，最后才 install 到正式目录。
 cos_cp "cos://${COS_ALIAS}/mysql/${archive_name}" "${downloaded_archive}" ||
   fail '备份文件下载失败'
 cos_cp "cos://${COS_ALIAS}/mysql/${checksum_name}" "${downloaded_checksum}" ||

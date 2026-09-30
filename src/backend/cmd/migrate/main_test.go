@@ -7,6 +7,7 @@ import (
 )
 
 func TestDatabaseConfigPreservesCredentials(t *testing.T) {
+	// 特殊字符用来证明 DSN 由驱动安全编码，而不是通过字符串拼接产生歧义。
 	values := map[string]string{
 		"MYSQL_HOST":     "mysql",
 		"MYSQL_PORT":     "3306",
@@ -20,6 +21,7 @@ func TestDatabaseConfigPreservesCredentials(t *testing.T) {
 		t.Fatalf("databaseConfig() error = %v", err)
 	}
 
+	// 格式化后再解析，验证一次完整的往返转换没有改变凭据。
 	parsed, err := mysql.ParseDSN(config.FormatDSN())
 	if err != nil {
 		t.Fatalf("ParseDSN() error = %v", err)
@@ -33,6 +35,7 @@ func TestDatabaseConfigPreservesCredentials(t *testing.T) {
 }
 
 func TestDatabaseConfigRejectsInvalidPort(t *testing.T) {
+	// 输入边界在尝试连接前失败，错误稳定且不会产生无意义的网络请求。
 	values := map[string]string{
 		"MYSQL_HOST":     "mysql",
 		"MYSQL_PORT":     "invalid",
@@ -48,6 +51,7 @@ func TestDatabaseConfigRejectsInvalidPort(t *testing.T) {
 }
 
 func TestRunRejectsUnsafeCommand(t *testing.T) {
+	// reset 不在生产迁移器的允许列表中，避免通过部署入口清空迁移状态。
 	err := run([]string{"reset"}, func(string) string { return "unused" })
 	if err == nil || err.Error() != "command must be exactly one of: up, down" {
 		t.Fatalf("run() error = %v", err)

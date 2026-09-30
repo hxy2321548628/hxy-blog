@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# 把一组 .sql.gz 与 .sha256 上传到私有 COS，并立即下载到临时目录复验。
+# “上传命令成功”不足以证明灾难时可恢复，因此回读校验是成功条件的一部分。
 set -Eeuo pipefail
 umask 077
 
@@ -26,6 +28,7 @@ for command_name in cmp cut find grep gzip mktemp realpath sha256sum stat; do
   command -v "${command_name}" >/dev/null || fail "缺少命令 ${command_name}"
 done
 
+# 每次执行都核对二进制、属主、配置属主和权限，防止长期服务器状态漂移。
 [[ -x ${COSCLI_PATH} ]] || fail "缺少 ${COSCLI_PATH}"
 [[ $(stat -c '%u' "${COSCLI_PATH}") == 0 ]] || fail "${COSCLI_PATH} 必须由 root 拥有"
 [[ $(sha256sum "${COSCLI_PATH}" | cut -d ' ' -f 1) == "${COSCLI_SHA256}" ]] ||
@@ -39,6 +42,7 @@ fi
 grep -Fq '    mode: SecretKey' "${COS_CONFIG}" || fail 'COSCLI 未配置专用 CAM 子用户'
 grep -Fq '    disableencryption: "false"' "${COS_CONFIG}" || fail 'COSCLI 密钥加密未启用'
 
+# realpath 消除 ../ 和符号路径，再用前缀白名单限制只能读取受管备份目录。
 backup_path=$(realpath -e -- "$1") || fail '备份文件不存在'
 [[ ${backup_path} == "${BACKUP_DIR}/"* && ${backup_path} == *.sql.gz ]] ||
   fail '只允许同步受管备份目录中的 .sql.gz 文件'
@@ -55,6 +59,7 @@ readonly checksum_name="${archive_name}.sha256"
 gzip -t "${backup_path}" || fail '本地备份压缩文件损坏'
 
 cos_cp() {
+  # 集中注入配置路径并关闭可能包含路径细节的 COSCLI 日志；调用方只描述源和目标。
   "${COSCLI_PATH}" cp "$@" \
     --config-path "${COS_CONFIG}" \
     --bucket-type COS \
@@ -77,6 +82,7 @@ cos_cp "${checksum_path}" "${checksum_object}" \
   --server-side-encryption AES256 || fail '校验文件上传失败'
 
 verification_directory=$(mktemp -d)
+# 回读内容只用于本次验证，退出时无条件清理。
 trap 'rm -rf -- "${verification_directory}"' EXIT
 readonly downloaded_archive="${verification_directory}/${archive_name}"
 readonly downloaded_checksum="${verification_directory}/${checksum_name}"

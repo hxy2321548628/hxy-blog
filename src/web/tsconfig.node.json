@@ -1,12 +1,15 @@
 {
   "compilerOptions": {
+    // composite 允许根 tsconfig 通过 project references 调用此配置。
     "composite": true,
     "skipLibCheck": true,
+    // Vite 自己打包配置依赖，tsc 只做严格类型检查而不生成 JavaScript。
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
     "strict": true,
     "noEmit": true
   },
+  // Node 侧目前只有 Vite 配置；浏览器组件不进入这个类型环境。
   "include": ["vite.config.ts"]
 }

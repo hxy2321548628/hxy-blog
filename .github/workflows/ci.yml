@@ -1,5 +1,7 @@
 name: CI
 
+# 流程概览：安装依赖 → 运行代码质量门禁 → 构建镜像 → 在真实 MySQL 上验证迁移
+# → 启动 API/Web 镜像做跨容器冒烟测试。所有步骤都通过才产生名为 check 的状态。
 on:
   # 所有合并到 main 的变更都必须先通过这条 PR 门禁。
   pull_request:
@@ -23,23 +25,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # checkout 获取触发本次工作流的精确提交。PR 运行时是 GitHub 生成的合并测试提交。
       - uses: actions/checkout@v4
+      # Go 版本从 go.mod 读取，避免工作流和源码分别维护版本号。
       - uses: actions/setup-go@v5
         with:
           go-version-file: src/backend/go.mod
           cache: true
+      # Node 版本与前端构建镜像保持同一主版本，并以 lockfile 作为缓存键。
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: src/web/package-lock.json
+      # npm ci 严格按 package-lock.json 安装，锁文件不一致时直接失败。
       - run: npm --prefix src/web ci
+      # 本地与 CI 共用 Makefile，确保开发者可以复现质量门禁。
       - run: make check
       # Dockerfile 也是交付代码，PR 必须证明两个生产镜像都能构建。
       - run: make container-build
       - name: 验证 Goose up、幂等执行和 down
         run: |
+          # -e 遇错退出，-u 拒绝未定义变量；任何断言失败都会使 Job 失败。
           set -eu
+          # --wait 会等到 Compose 中的 MySQL healthcheck 成功后再返回。
           docker compose --env-file .env.example -f deploy/compose.yaml up -d mysql --wait
 
           # 使用即将发布的 API 镜像执行真实 MySQL 迁移，避免只验证 SQL 语法。
@@ -59,23 +68,28 @@ jobs:
                 --execute "SELECT MAX(version_id) FROM goose_db_version WHERE is_applied = 1;"
             '
           )"
+          # 初始迁移版本应为 1；同时证明第二次 up 没有重复执行副作用。
           test "$version" = 1
 
+          # down 后再次 up，证明迁移具备最小可回滚性且能重新应用。
           docker compose --env-file .env.example -f deploy/compose.yaml \
             run --rm --no-deps --entrypoint /app/migrate api down
           docker compose --env-file .env.example -f deploy/compose.yaml \
             run --rm --no-deps --entrypoint /app/migrate api up
       - name: 清理迁移测试数据库
+        # 即使前一步失败也清理卷，避免 GitHub Runner 留下测试状态。
         if: always()
         run: docker compose --env-file .env.example -f deploy/compose.yaml down --volumes
       - name: 验证容器健康检查、API 代理和 SPA 回退
         run: |
           set -eu
+          # 独立网络模拟 Compose 服务发现，但不依赖开发数据库继续运行。
           docker network create hxy-blog-ci
           # 与 Compose 中的服务发现名称保持一致，Nginx 通过 api:8080 转发请求。
           docker run --detach --name hxy-blog-api-ci --network hxy-blog-ci --network-alias api hxy-blog-api:local
           docker run --detach --name hxy-blog-web-ci --network hxy-blog-ci --publish 127.0.0.1:18080:8080 hxy-blog-web:local
 
+          # 最多等待 30 秒；超时打印两个容器日志，便于直接从 CI 定位故障。
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:18080/healthz > /dev/null; then
               break
@@ -88,9 +102,11 @@ jobs:
             sleep 1
           done
 
+          # 第一条请求验证 Nginx → Go API 代理，第二条验证 React SPA 未知路由回退。
           curl --fail --silent http://127.0.0.1:18080/api/health | grep --fixed-strings '"status":"ok"'
           curl --fail --silent http://127.0.0.1:18080/not-a-real-page | grep --fixed-strings '<div id="root"></div>'
       - name: 清理冒烟测试容器
+        # always() 保证失败路径也执行；不存在时忽略错误以保留原始失败原因。
         if: always()
         run: |
           docker rm --force hxy-blog-web-ci hxy-blog-api-ci 2>/dev/null || true

@@ -1,15 +1,19 @@
 name: hxy-blog
 
+# 本文件服务本地开发和 CI：可以从当前源码 build，也允许通过环境变量复用已有镜像。
+# ${VAR:-default} 表示变量为空时使用默认值；${VAR:?message} 表示缺失时立即报错。
 services:
   mysql:
     # 复用腾讯云服务器现有镜像，并固定为已盘点的不可变 Digest。
     image: ${MYSQL_IMAGE:-mysql:8.0@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b}
     command:
+      # 显式固定字符集、排序规则和资源上限，使本地行为接近 2C2G 生产环境。
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
       - --innodb-buffer-pool-size=268435456
       - --max-connections=50
     environment:
+      # 应用用户用于日常连接；root 只用于健康检查、迁移测试和备份操作。
       MYSQL_DATABASE: ${MYSQL_DATABASE:-hxy_blog}
       MYSQL_USER: ${MYSQL_USER:-hxy_blog}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MYSQL_PASSWORD}
@@ -19,8 +23,10 @@ services:
       # 只绑定回环地址，供本机开发使用，不向公网暴露数据库。
       - 127.0.0.1:${MYSQL_BIND_PORT:-3306}:3306
     volumes:
+      # 命名卷独立于容器生命周期，重新创建 MySQL 容器不会丢失开发数据。
       - mysql_data:/var/lib/mysql
     healthcheck:
+      # $$ 会把 $ 留给容器内 Shell 展开，避免 Compose 在宿主机提前替换密码。
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
       interval: 10s
       timeout: 5s
@@ -30,6 +36,7 @@ services:
     mem_limit: 768m
 
   api:
+    # API_IMAGE 可直接指定已构建镜像；没有指定时按下面的 build 配置生成本地镜像。
     image: ${API_IMAGE:-hxy-blog-api:local}
     build:
       context: ../src/backend
@@ -45,10 +52,13 @@ services:
       MYSQL_USER: ${MYSQL_USER:-hxy_blog}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MYSQL_PASSWORD}
     depends_on:
+      # 仅按启动顺序不够；service_healthy 确保 API 启动前 MySQL 已可接受连接。
       mysql:
         condition: service_healthy
     expose:
+      # expose 只在 Compose 网络中声明端口，不把 API 直接发布到宿主机。
       - "8080"
+    # 运行时根文件系统只读，临时文件只能写入内存中的 /tmp。
     read_only: true
     tmpfs:
       - /tmp
@@ -65,6 +75,7 @@ services:
         VERSION: ${APP_VERSION:-dev}
         REVISION: ${APP_REVISION:-local}
     depends_on:
+      # Web 的 Nginx 会反向代理 /api，因此等待 API 健康后再启动。
       api:
         condition: service_healthy
     ports:
@@ -77,4 +88,5 @@ services:
     mem_limit: 128m
 
 volumes:
+  # 只声明卷名；实际位置和生命周期由 Docker 管理。
   mysql_data:

@@ -1,5 +1,7 @@
 name: hxy-blog-production
 
+# 生产文件不包含 build 段：服务器只能拉取 CI 已发布的 Digest，不能现场编译源码。
+# 所有密码来自 root 专属 runtime.env；release.env 只保存镜像 Digest 和 Commit。
 # 生产日志设置上限，避免单机磁盘被容器日志耗尽。
 x-logging: &default-logging
   driver: json-file
@@ -9,19 +11,23 @@ x-logging: &default-logging
 
 services:
   mysql:
+    # 固定 Digest 防止同名标签在供应链中漂移。
     image: ${MYSQL_IMAGE:-mysql:8.0@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b}
     command:
+      # 256 MiB Buffer Pool 和 50 连接是为 2 GiB 单机保留应用与系统余量。
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
       - --innodb-buffer-pool-size=268435456
       - --max-connections=50
     environment:
+      # :? 让缺失变量在 Compose 解析阶段就失败，而不是用危险默认密码启动。
       MYSQL_DATABASE: ${MYSQL_DATABASE:?生产环境必须设置 MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER:?生产环境必须设置 MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?生产环境必须设置 MYSQL_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?生产环境必须设置 MYSQL_ROOT_PASSWORD}
       TZ: Asia/Shanghai
     volumes:
+      # 应用镜像可随时替换，数据库状态只保存在命名卷中。
       - mysql_data:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
@@ -31,6 +37,7 @@ services:
       start_period: 30s
     restart: unless-stopped
     mem_limit: 768m
+    # YAML 锚点复用统一的日志轮换配置。
     logging: *default-logging
 
   api:
@@ -47,7 +54,9 @@ services:
       mysql:
         condition: service_healthy
     expose:
+      # API 只允许容器网络内的 Web 服务访问，不直接监听宿主机公网端口。
       - "8080"
+    # read_only、无新增权限、删除全部 Linux Capability 共同缩小容器被利用后的权限。
     read_only: true
     tmpfs:
       - /tmp
@@ -80,4 +89,5 @@ services:
     logging: *default-logging
 
 volumes:
+  # 部署脚本回滚应用时不会删除这个卷；数据库回退必须单独人工评估。
   mysql_data:

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# 在服务器安装经过固定版本和 SHA-256 校验的腾讯云 COSCLI。
+# 该步骤由管理员一次性执行，不属于每次自动部署。
 set -Eeuo pipefail
 umask 077
 
@@ -24,10 +26,12 @@ for command_name in curl install mktemp sha256sum; do
 done
 
 temporary_directory=$(mktemp -d)
+# 下载完成、校验失败或安装完成时都移除临时目录。
 trap 'rm -rf -- "${temporary_directory}"' EXIT
 readonly download_path="${temporary_directory}/coscli"
 
 # 使用固定版本和 SHA-256，避免服务器在无审核的情况下跟随最新版本。
+# HTTP 错误视为失败，跟随 GitHub Release 重定向，并对瞬时网络错误重试。
 curl \
   --fail \
   --location \
@@ -40,5 +44,6 @@ curl \
 printf '%s  %s\n' "${COSCLI_SHA256}" "${download_path}" | sha256sum --check --status ||
   fail 'COSCLI SHA-256 校验失败'
 
+# install 同时复制并固定属主/权限，避免普通用户替换 root 后续执行的二进制。
 install -o root -g root -m 755 "${download_path}" "${COSCLI_PATH}"
 printf 'COSCLI 安装成功：version=%s path=%s\n' "${COSCLI_VERSION}" "${COSCLI_PATH}"

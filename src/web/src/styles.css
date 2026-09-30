@@ -1,4 +1,5 @@
 :root {
+  /* 全局使用温暖纸张色和衬线正文，系统字体作为中文可用性回退。 */
   color: #26251f;
   background: #f4f0e7;
   font-family: Georgia, 'Noto Serif SC', serif;
@@ -7,6 +8,7 @@
 }
 
 * {
+  /* width/height 包含 padding 与 border，响应式尺寸更容易推导。 */
   box-sizing: border-box;
 }
 
@@ -17,6 +19,7 @@ body {
 }
 
 .shell {
+  /* 内容最大 720px，小屏始终保留左右各 24px 的呼吸空间。 */
   width: min(720px, calc(100% - 48px));
   margin: 0 auto;
   padding: 18vh 0 80px;
@@ -32,6 +35,7 @@ body {
 h1 {
   max-width: 680px;
   margin: 0;
+  /* clamp 在小屏、流式区间和大屏之间限制字号，避免额外媒体查询。 */
   font-size: clamp(2.75rem, 8vw, 5.75rem);
   font-weight: 500;
   line-height: 0.98;
@@ -46,6 +50,7 @@ h1 {
 }
 
 .status {
+  /* 状态文案与圆点作为一个行内整体，内容增加时仍保持垂直居中。 */
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -55,6 +60,7 @@ h1 {
 }
 
 .status span {
+  /* 默认黄色代表“检查中”，后续修饰类只覆盖颜色。 */
   width: 9px;
   height: 9px;
   border-radius: 50%;

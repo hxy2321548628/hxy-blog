@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 
+# 交互式创建 COSCLI 凭据配置。脚本要求管理员在终端手工输入专用 CAM 子用户
+# 的密钥，避免凭据出现在 GitHub、命令行参数、Shell 历史或仓库中。
 set -Eeuo pipefail
 umask 077
 
+# 桶、地域与别名属于非敏感配置；SecretId/SecretKey 仅在函数局部生命周期内存在。
 readonly COSCLI_PATH=/usr/local/bin/coscli
 readonly COSCLI_SHA256=a07de5ba2800147a700ed29036b0c76a4229088cee68e1682d0eae19b638a915
 readonly CONFIG_DIRECTORY=/etc/hxy-blog
@@ -19,6 +22,7 @@ fail() {
 }
 
 cleanup() {
+  # 配置失败时不留下包含密钥材料的临时文件。
   [[ -z ${temporary_config} ]] || rm -f -- "${temporary_config}"
 }
 trap cleanup EXIT
@@ -27,6 +31,7 @@ if [[ ${EUID} -ne 0 ]]; then
   fail '必须由 root 执行'
 fi
 
+# TTY 检查阻止 CI 或管道自动喂入长期密钥，保留明确的人工作业边界。
 [[ -t 0 ]] || fail '必须在交互式终端中执行，禁止通过管道传入密钥'
 
 for command_name in cut grep install mktemp sha256sum stat; do
@@ -38,6 +43,7 @@ done
 [[ $(sha256sum "${COSCLI_PATH}" | cut -d ' ' -f 1) == "${COSCLI_SHA256}" ]] ||
   fail 'COSCLI 二进制文件校验失败'
 
+# SecretKey 使用 read -s 隐藏回显，并要求重复输入以降低录入错误概率。
 printf '请输入新建 CAM 子用户的 SecretId（输入内容不会上传）：'
 IFS= read -r secret_id
 printf '请输入 SecretKey（屏幕不显示）：'
@@ -55,6 +61,7 @@ temporary_config=$(mktemp --suffix=.yaml "${CONFIG_DIRECTORY}/.cos-backup.XXXXXX
 
 # 密钥只经标准输入传给 COSCLI，不进入命令行、Shell 历史或日志。
 {
+  # 这些行严格对应 COSCLI config init 的交互式问题顺序；空字符串表示接受无关默认项。
   printf '%s\n' \
     "${temporary_config}" \
     SecretKey \
@@ -78,6 +85,7 @@ if grep -Fq "${secret_id}" "${temporary_config}" || grep -Fq "${secret_key}" "${
   fail '拒绝保存明文密钥'
 fi
 
+# 尽早从当前 Shell 环境移除明文变量，再以 0600 原子安装最终配置。
 unset secret_id secret_key secret_key_confirmation
 install -o root -g root -m 600 "${temporary_config}" "${CONFIG_PATH}"
 printf 'COSCLI 凭证配置成功：path=%s\n' "${CONFIG_PATH}"

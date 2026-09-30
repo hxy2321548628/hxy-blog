@@ -1,6 +1,8 @@
+# 缩小 Docker 构建上下文，并防止本地凭据、Git 历史和缓存进入镜像层。
 .git
 .env
 .env.*
+# 以下目录/文件都是可重新生成的本地产物。
 .cache
 bin
 coverage
