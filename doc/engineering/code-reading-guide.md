@@ -6,10 +6,11 @@
 
 1. `Makefile`：理解本地开发与提交前门禁。
 2. `src/backend/cmd/api` 与 `src/web/src`：理解最小应用请求链。
-3. `deploy/compose.yaml`、两个 Dockerfile 和 `src/web/nginx.conf`：理解容器如何组成运行环境。
-4. `.github/workflows/ci.yml`：理解 PR 为什么能阻止有问题的代码合并。
-5. `.github/workflows/release.yml` 与 `deploy/scripts/deploy.sh`：理解合并后如何发布和回滚。
-6. `deploy/scripts/backup-db.sh`、`sync-backup-cos.sh` 和 `restore-drill.sh`：理解数据保护闭环。
+3. `src/backend/internal/migrations`：理解文章、管理员和刷新会话的初始数据约束。
+4. `deploy/compose.yaml`、两个 Dockerfile 和 `src/web/nginx.conf`：理解容器如何组成运行环境。
+5. `.github/workflows/ci.yml`：理解 PR 为什么能阻止有问题的代码合并。
+6. `.github/workflows/release.yml` 与 `deploy/scripts/deploy.sh`：理解合并后如何发布和回滚。
+7. `deploy/scripts/backup-db.sh`、`sync-backup-cos.sh` 和 `restore-drill.sh`：理解数据保护闭环。
 
 ## 请求链
 

@@ -68,12 +68,34 @@ jobs:
                 --execute "SELECT MAX(version_id) FROM goose_db_version WHERE is_applied = 1;"
             '
           )"
-          # 初始迁移版本应为 1；同时证明第二次 up 没有重复执行副作用。
-          test "$version" = 1
+          # 当前最新版本应为 2；同时证明第二次 up 没有重复执行副作用。
+          test "$version" = 2
+
+          # 显式标记的集成测试连接真实 MySQL，验证索引、CHECK 和外键而不是仅检查 SQL 文本。
+          set -a
+          . ./.env.example
+          set +a
+          go -C src/backend test -tags=integration ./internal/migrations -count=1
 
           # down 后再次 up，证明迁移具备最小可回滚性且能重新应用。
           docker compose --env-file .env.example -f deploy/compose.yaml \
             run --rm --no-deps --entrypoint /app/migrate api down
+
+          remaining_tables="$(
+            docker compose --env-file .env.example -f deploy/compose.yaml exec -T mysql sh -ec '
+              MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" exec mysql \
+                --host=127.0.0.1 \
+                --user=root \
+                --batch \
+                --skip-column-names \
+                "${MYSQL_DATABASE}" \
+                --execute "SELECT COUNT(*) FROM information_schema.tables
+                  WHERE table_schema = DATABASE()
+                  AND table_name IN ('"'"'posts'"'"', '"'"'admins'"'"', '"'"'refresh_tokens'"'"');"
+            '
+          )"
+          test "${remaining_tables}" = 0
+
           docker compose --env-file .env.example -f deploy/compose.yaml \
             run --rm --no-deps --entrypoint /app/migrate api up
       - name: 清理迁移测试数据库
