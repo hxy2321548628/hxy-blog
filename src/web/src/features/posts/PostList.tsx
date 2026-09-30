@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import type { PostSummary } from './postApi'
 
 interface PostListProps {
@@ -20,12 +21,17 @@ function PostList({ items }: PostListProps) {
     <ol className="post-list">
       {items.map((item) => (
         <li key={item.slug} className="post-list__item">
-          <article>
-            <time className="post-meta" dateTime={item.publishedAt}>
-              {dateFormatter.format(new Date(item.publishedAt))}
-            </time>
-            <h2>{item.title}</h2>
-          </article>
+          <Link
+            className="post-list__link"
+            to={`/posts/${encodeURIComponent(item.slug)}`}
+          >
+            <article>
+              <time className="post-meta" dateTime={item.publishedAt}>
+                {dateFormatter.format(new Date(item.publishedAt))}
+              </time>
+              <h2>{item.title}</h2>
+            </article>
+          </Link>
         </li>
       ))}
     </ol>

@@ -1,4 +1,5 @@
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
+import SiteHeader from '../../components/SiteHeader'
 import PostList from './PostList'
 import { useListPostsQuery } from './postApi'
 
@@ -24,21 +25,7 @@ function PostListPage() {
       <a className="skip-link" href="#main-content">
         跳到主要内容
       </a>
-      <header className="site-header">
-        <div className="site-header__inner">
-          <Link className="site-brand" to="/" aria-label="hxy.blog 首页">
-            hxy.blog
-          </Link>
-          <nav className="site-nav" aria-label="全局导航">
-            <Link className="site-nav__link site-nav__link--active" to="/" aria-current="page">
-              文章
-            </Link>
-            <a className="site-nav__link" href="#about">
-              关于
-            </a>
-          </nav>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="page-shell" id="main-content">
         <div className="page-grid">
