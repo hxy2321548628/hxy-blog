@@ -437,6 +437,8 @@ sudo /usr/local/sbin/hxy-blog-db-restore-drill \
   /var/backups/hxy-blog/mysql/20260930T033000Z-sha-0123456789ab.sql.gz
 ```
 
+**不要用 `coscli ls` 核验备份是否存在**——它会报 403，原因是 CAM 策略有意不授予 `ListObjects`（列举是桶级操作），这是最小权限的特性而非故障。核验请用上面需要 `GetObject` 的取回命令，或查看部署是否整体成功（备份步骤成功才会走到应用切换）。详见[排错记录第 10 条](./troubleshooting-and-faq.md)。
+
 ### 8.4 验证容器没有公网暴露
 
 ```bash
