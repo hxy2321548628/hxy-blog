@@ -15,7 +15,7 @@ MVP 只有一名管理员，但创建、编辑、发布文章和上传图片都�
 
 采用“短期 Access JWT + 轮换 Refresh Token Cookie”方案：
 
-- Access Token 使用 JWT，有效期初始设为约 10 分钟。
+- Access Token 使用 JWT，有效期固定为 10 分钟。
 - Access JWT 仅保存在 React/Redux 内存中，通过 `Authorization: Bearer` 发送；页面刷新后不持久化。
 - Refresh Token 使用高熵随机不透明值，不使用长期 JWT。
 - Refresh Token 只通过 `Secure`、`HttpOnly`、适当 `SameSite` 的 Cookie 传输。
@@ -23,6 +23,8 @@ MVP 只有一名管理员，但创建、编辑、发布文章和上传图片都�
 - 每次刷新都轮换 Refresh Token；旧 Token 再次出现时视为重放，撤销整个 Token Family。
 - 管理员密码使用 Argon2id 哈希；数据库不保存明文密码或可逆密文。
 - MVP 只有一个管理员账户，不引入 OAuth、RBAC 或多租户权限模型。
+
+会话参数固定为：Refresh Token 每次签发后 7 天过期，会话从首次登录起最多持续 30 天；轮换后的过期时间取“当前时间加 7 天”和会话绝对过期时间中的较早值。
 
 ## 会话流程
 
@@ -60,11 +62,14 @@ sequenceDiagram
 
 ## JWT 约束
 
+- 签名算法固定为 `HS256`；密钥至少包含 32 字节密码学随机数据，并以密钥 ID 区分当前和上一把密钥。
 - 只接受明确配置的签名算法，拒绝 `none` 或算法降级。
 - 必须验证签名、`exp`、`iat`、`iss`、`aud` 和唯一令牌标识。
 - JWT Claim 只包含授权所需最少信息，不放入密码哈希、邮箱等不必要数据。
 - 签名密钥只通过生产密钥注入，具备明确轮换策略；不得写入仓库或日志。
 - Access JWT 过期只通过 Refresh 流程续期，不静默延长旧 Token。
+- `iss` 固定为 `hxy-blog`，`aud` 固定为 `hxy-blog-admin`，允许的时钟偏差最多为 30 秒。
+- 签名密钥每 90 天轮换一次；签发只使用当前密钥，上一把密钥最多额外保留 11 分钟用于验证已签发的 Access JWT。发生泄露时立即轮换，不等待周期到期。
 
 具体 JWT 库在实现故事中选择，必须支持严格算法限制和完整 Claim 校验。
 
@@ -87,15 +92,17 @@ sequenceDiagram
 
 ## Cookie 与 CSRF
 
-- 生产环境 Cookie 必须启用 `Secure` 和 `HttpOnly`，Path 仅覆盖认证刷新所需范围。
-- `SameSite` 根据前端与 API 的最终域名拓扑确定；默认同站部署并优先使用 `Strict` 或 `Lax`。
+- 生产环境前端与 API 同源部署在 `https://hxy2333.site`，API 使用 `/api` 前缀，不拆分 API 子域名。
+- Refresh Cookie 名称固定为 `__Secure-hxy_refresh`，启用 `Secure`、`HttpOnly` 和 `SameSite=Strict`，省略 `Domain` 以保持 Host-only，`Path=/api/auth`。
 - Refresh 和 Logout 除 Cookie 外还必须校验 `Origin`/`Referer` 是否属于允许的站点。
-- CORS 只允许明确的前端来源，禁止带凭据请求使用通配符来源。
+- 生产环境同源请求不启用 CORS；本地开发只允许配置中明确列出的 `http://127.0.0.1:5173` 和 `http://localhost:5173`，禁止带凭据请求使用通配符来源。
 - Access JWT 使用请求头发送，不依赖 Cookie，因此普通管理 API 不使用 Cookie 作为授权依据。
+- 备案通过并启用 HTTPS 前，不在公网 IP 的明文 HTTP 上开放生产登录；本地开发若关闭 `Secure` 必须使用独立的非生产配置。
 
 ## 密码与登录保护
 
-- 密码使用 Argon2id；参数需在 2C2G 生产服务器上基准测试后确定，在安全性和内存占用间取平衡。
+- 密码使用 Argon2id，参数固定为内存 64 MiB、迭代 3 次、并行度 1、16 字节随机盐和 32 字节输出，并使用 PHC 字符串保存算法与参数。
+- 2026-09-30 在目标 2C2G 服务器实测该参数平均约 120 ms；API 同时最多执行两个密码哈希，避免 256 MiB 容器因恶意并发耗尽内存。
 - 登录接口按来源和账户实施频率限制，并记录失败计数，不记录输入密码。
 - 管理员初始密码不得写入镜像、迁移或仓库；通过一次性生产配置安全注入。
 - 修改密码、轮换签名密钥或发现 Refresh Token 重放时撤销所有相关会话。
@@ -185,12 +192,17 @@ sequenceDiagram
 
 负面影响：需要维护 Refresh Token 状态和轮换事务；前端需要协调 401 刷新；本方案并非完全无状态 JWT。
 
-## 开放项
+## 已关闭的实施参数
 
-- Access JWT、Refresh Token 和会话绝对过期时间的最终数值。
-- JWT 签名算法和密钥轮换周期。
-- Argon2id 在 `ssh tencent` 服务器上的参数基准。
-- 正式前端/API 域名，用于确定 Cookie Domain、SameSite 和 CORS。
+- Access JWT 10 分钟，Refresh Token 7 天，会话绝对有效期 30 天。
+- JWT 使用 `HS256` 和至少 32 字节随机密钥，90 天定期轮换，并严格校验算法、签发方和受众。
+- Argon2id 使用 64 MiB、3 次迭代、单线程；目标服务器基准约 120 ms。
+- 生产环境使用 `https://hxy2333.site` 同源承载 SPA 与 `/api`，Refresh Cookie 使用 Host-only、`Secure`、`HttpOnly` 和 `SameSite=Strict`。
 
-这些开放项必须在鉴权故事进入开发前确认并写入任务卡或安全配置文档。
+实现故事仍需通过安全测试验证这些参数，但不再需要重新做架构选择。
 
+## 参考
+
+- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)
+- [RFC 8725：JSON Web Token Best Current Practices](https://www.rfc-editor.org/rfc/rfc8725.html)
+- [MDN：Secure cookie configuration](https://developer.mozilla.org/en-US/docs/Web/Security/Practical_implementation_guides/Cookies)
