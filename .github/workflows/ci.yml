@@ -23,15 +23,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # 第三方 Action 固定到完整 Commit SHA：标签可被上游移动，固定 SHA 可避免供应链漂移。
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version-file: src/backend/go.mod
           cache: true
-          # Go 模块位于子目录，必须显式声明；默认只会在仓库根目录查找 go.sum。
-          cache-dependency-path: src/backend/go.sum
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
