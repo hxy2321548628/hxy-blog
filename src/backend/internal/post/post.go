@@ -3,11 +3,14 @@ package post
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+var ErrNotFound = errors.New("post not found")
 
 const (
 	DefaultPage     = 1
@@ -26,6 +29,14 @@ type Summary struct {
 	Slug        string    `json:"slug"`
 	Title       string    `json:"title"`
 	PublishedAt time.Time `json:"publishedAt"`
+}
+
+// Detail 是访客详情页可以读取的完整公开文章，不包含内部状态和更新时间。
+type Detail struct {
+	Slug            string    `json:"slug"`
+	Title           string    `json:"title"`
+	ContentMarkdown string    `json:"contentMarkdown"`
+	PublishedAt     time.Time `json:"publishedAt"`
 }
 
 // ListResult 同时返回当前页和总数，前端可以不额外请求地判断下一页。
@@ -68,6 +79,23 @@ func (repository *Repository) ListPublished(ctx context.Context, pagination Pagi
 	return items, total, nil
 }
 
+func (repository *Repository) GetPublishedBySlug(ctx context.Context, slug string) (Detail, error) {
+	var detail Detail
+	err := repository.database.WithContext(ctx).
+		Table("posts").
+		Select("slug", "title", "content_markdown", "published_at").
+		Where("slug = ? AND status = ?", slug, "published").
+		Take(&detail).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		// 草稿与不存在的文章使用同一结果，避免公开接口泄露未发布 slug。
+		return Detail{}, ErrNotFound
+	}
+	if err != nil {
+		return Detail{}, fmt.Errorf("get published post by slug: %w", err)
+	}
+	return detail, nil
+}
+
 // Service 作为 Handler 与持久化的边界，后续发布规则不会渗入 HTTP 层。
 type Service struct {
 	repository *Repository
@@ -88,4 +116,8 @@ func (service *Service) ListPublished(ctx context.Context, pagination Pagination
 		PageSize: pagination.PageSize,
 		Total:    total,
 	}, nil
+}
+
+func (service *Service) GetPublishedBySlug(ctx context.Context, slug string) (Detail, error) {
+	return service.repository.GetPublishedBySlug(ctx, slug)
 }

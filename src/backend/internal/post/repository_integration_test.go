@@ -4,6 +4,7 @@ package post
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -28,9 +29,9 @@ func TestRepositoryListPublished(t *testing.T) {
 
 	older := time.Date(2026, time.September, 30, 1, 0, 0, 0, time.UTC)
 	newer := older.Add(time.Hour)
-	insertPost(t, transaction, "older-post", "较早文章", "published", &older)
-	insertPost(t, transaction, "draft-post", "草稿", "draft", nil)
-	insertPost(t, transaction, "newer-post", "较新文章", "published", &newer)
+	insertPost(t, transaction, "older-post", "较早文章", "# older", "published", &older)
+	insertPost(t, transaction, "draft-post", "草稿", "# draft", "draft", nil)
+	insertPost(t, transaction, "newer-post", "较新文章", "# newer", "published", &newer)
 
 	items, total, err := NewRepository(transaction).ListPublished(
 		context.Background(), Pagination{Page: 1, PageSize: 1},
@@ -43,6 +44,40 @@ func TestRepositoryListPublished(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].Slug != "newer-post" || !items[0].PublishedAt.Equal(newer) {
 		t.Fatalf("items = %#v", items)
+	}
+}
+
+func TestRepositoryGetPublishedBySlug(t *testing.T) {
+	database := openIntegrationDatabase(t)
+	transaction := database.Begin()
+	if transaction.Error != nil {
+		t.Fatalf("begin transaction: %v", transaction.Error)
+	}
+	t.Cleanup(func() { transaction.Rollback() })
+	if err := transaction.Exec("DELETE FROM posts").Error; err != nil {
+		t.Fatalf("clear posts in transaction: %v", err)
+	}
+
+	publishedAt := time.Date(2026, time.October, 1, 2, 3, 4, 0, time.UTC)
+	insertPost(t, transaction, "published-post", "公开文章", "# 正文", "published", &publishedAt)
+	insertPost(t, transaction, "draft-post", "草稿", "# 不应公开", "draft", nil)
+
+	repository := NewRepository(transaction)
+	detail, err := repository.GetPublishedBySlug(context.Background(), "published-post")
+	if err != nil {
+		t.Fatalf("GetPublishedBySlug() error = %v", err)
+	}
+	if detail.Slug != "published-post" || detail.Title != "公开文章" || detail.ContentMarkdown != "# 正文" {
+		t.Fatalf("detail = %#v", detail)
+	}
+	if !detail.PublishedAt.Equal(publishedAt) {
+		t.Fatalf("publishedAt = %v, want %v", detail.PublishedAt, publishedAt)
+	}
+
+	for _, slug := range []string{"draft-post", "missing-post"} {
+		if _, err := repository.GetPublishedBySlug(context.Background(), slug); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("GetPublishedBySlug(%q) error = %v, want ErrNotFound", slug, err)
+		}
 	}
 }
 
@@ -73,13 +108,13 @@ func openIntegrationDatabase(t *testing.T) *gorm.DB {
 	return database
 }
 
-func insertPost(t *testing.T, database *gorm.DB, slug, title, status string, publishedAt *time.Time) {
+func insertPost(t *testing.T, database *gorm.DB, slug, title, content, status string, publishedAt *time.Time) {
 	t.Helper()
 	now := time.Now().UTC()
 	if err := database.Exec(`
 		INSERT INTO posts (slug, title, content_markdown, status, published_at, created_at, updated_at)
-		VALUES (?, ?, '# content', ?, ?, ?, ?)`,
-		slug, title, status, publishedAt, now, now,
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		slug, title, content, status, publishedAt, now, now,
 	).Error; err != nil {
 		t.Fatalf("insert post %s: %v", slug, err)
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -11,20 +12,22 @@ import (
 	"hxy-blog/backend/internal/post"
 )
 
-type postListService interface {
+type postService interface {
 	ListPublished(ctx context.Context, pagination post.Pagination) (post.ListResult, error)
+	GetPublishedBySlug(ctx context.Context, slug string) (post.Detail, error)
 }
 
 // newHandler 负责集中注册 HTTP 路由。
 //
 // 返回 http.Handler 而不是在这里启动服务器，测试就可以用 httptest 直接调用路由，
 // 不需要占用真实端口。Gin 只停留在协议边界，业务服务不依赖 Gin 类型。
-func newHandler(posts postListService) http.Handler {
+func newHandler(posts postService) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.GET("/api/health", healthHandler)
 	router.GET("/api/posts", listPublishedPostsHandler(posts))
+	router.GET("/api/posts/:slug", getPublishedPostHandler(posts))
 	return router
 }
 
@@ -34,7 +37,7 @@ func healthHandler(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-func listPublishedPostsHandler(posts postListService) gin.HandlerFunc {
+func listPublishedPostsHandler(posts postService) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		pagination, ok := parsePagination(ctx)
 		if !ok {
@@ -55,6 +58,28 @@ func listPublishedPostsHandler(posts postListService) gin.HandlerFunc {
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
+	}
+}
+
+func getPublishedPostHandler(posts postService) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		detail, err := posts.GetPublishedBySlug(ctx.Request.Context(), ctx.Param("slug"))
+		if errors.Is(err, post.ErrNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{
+				"code":    "POST_NOT_FOUND",
+				"message": "文章不存在",
+			})
+			return
+		}
+		if err != nil {
+			slog.Error("get published post failed", "error", err)
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"code":    "INTERNAL_ERROR",
+				"message": "服务暂时不可用",
+			})
+			return
+		}
+		ctx.JSON(http.StatusOK, detail)
 	}
 }
 

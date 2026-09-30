@@ -14,14 +14,20 @@ import (
 )
 
 type postListStub struct {
-	result post.ListResult
-	err    error
+	result    post.ListResult
+	err       error
+	detail    post.Detail
+	detailErr error
 }
 
 func (stub postListStub) ListPublished(_ context.Context, pagination post.Pagination) (post.ListResult, error) {
 	stub.result.Page = pagination.Page
 	stub.result.PageSize = pagination.PageSize
 	return stub.result, stub.err
+}
+
+func (stub postListStub) GetPublishedBySlug(_ context.Context, _ string) (post.Detail, error) {
+	return stub.detail, stub.detailErr
 }
 
 func TestHealth(t *testing.T) {
@@ -99,6 +105,58 @@ func TestListPublishedPostsHidesDatabaseErrors(t *testing.T) {
 	response := httptest.NewRecorder()
 
 	newHandler(postListStub{err: errors.New("SELECT failed with private database details")}).ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+	if body := strings.TrimSpace(response.Body.String()); body != `{"code":"INTERNAL_ERROR","message":"服务暂时不可用"}` {
+		t.Fatalf("body = %q", body)
+	}
+}
+
+func TestGetPublishedPost(t *testing.T) {
+	publishedAt := time.Date(2026, time.October, 1, 2, 3, 4, 0, time.UTC)
+	request := httptest.NewRequest(http.MethodGet, "/api/posts/hello-world", nil)
+	response := httptest.NewRecorder()
+
+	newHandler(postListStub{detail: post.Detail{
+		Slug:            "hello-world",
+		Title:           "Hello World",
+		ContentMarkdown: "# 正文",
+		PublishedAt:     publishedAt,
+	}}).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
+	}
+	var body post.Detail
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Slug != "hello-world" || body.ContentMarkdown != "# 正文" {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
+func TestGetPublishedPostReturnsNotFoundForHiddenPost(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/posts/draft-post", nil)
+	response := httptest.NewRecorder()
+
+	newHandler(postListStub{detailErr: post.ErrNotFound}).ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusNotFound)
+	}
+	if body := strings.TrimSpace(response.Body.String()); body != `{"code":"POST_NOT_FOUND","message":"文章不存在"}` {
+		t.Fatalf("body = %q", body)
+	}
+}
+
+func TestGetPublishedPostHidesDatabaseErrors(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/posts/hello-world", nil)
+	response := httptest.NewRecorder()
+
+	newHandler(postListStub{detailErr: errors.New("SELECT failed with private database details")}).ServeHTTP(response, request)
 
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusInternalServerError)
