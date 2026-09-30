@@ -4,9 +4,12 @@ Description=Run hxy-blog MySQL backup every day
 [Timer]
 # 上海时区每日 03:30 执行，错过时在下次开机后补跑。
 OnCalendar=*-*-* 03:30:00 Asia/Shanghai
+# Persistent 会在关机错过计划时补跑；随机延迟用于避开固定时刻的云服务高峰。
 Persistent=true
 RandomizedDelaySec=10min
+# 明确指定被触发的 oneshot 服务，便于文件名变化时仍清晰可读。
 Unit=hxy-blog-db-backup.service
 
 [Install]
+# enable 后把 Timer 挂到系统的 timers.target，开机时自动激活。
 WantedBy=timers.target

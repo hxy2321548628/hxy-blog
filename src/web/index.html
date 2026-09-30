@@ -1,13 +1,16 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
+    <!-- UTF-8 与响应式 viewport 是中文页面和移动端布局的基础。 -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="hxy 的个人博客" />
     <title>hxy 的个人博客</title>
   </head>
   <body>
+    <!-- React 只接管这个挂载点；静态 HTML 保持最小，页面内容由组件渲染。 -->
     <div id="root"></div>
+    <!-- type=module 允许 Vite 从 TypeScript 入口构建 ES 模块依赖图。 -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

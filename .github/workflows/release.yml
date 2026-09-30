@@ -1,5 +1,7 @@
 name: Release
 
+# 流程概览：main 的 CI 成功 → 构建并推送两个 GHCR 镜像 → 记录不可变 Digest
+# → 等待 production Environment 人工批准 → 通过受限 SSH 命令让服务器按 Digest 部署。
 on:
   # 只有 main 的 CI 完成后才考虑发布，避免 Release 与 CI 并发竞速。
   workflow_run:
@@ -29,9 +31,11 @@ jobs:
       contents: read
       packages: write
     outputs:
+      # deploy Job 只接收仓库返回的内容 Digest，不依赖可移动的 main 标签。
       api_digest: ${{ steps.digests.outputs.api_digest }}
       web_digest: ${{ steps.digests.outputs.web_digest }}
     env:
+      # 镜像仓库和触发 CI 的 Commit 在整个 Job 内保持一致。
       API_IMAGE: ghcr.io/${{ github.repository_owner }}/hxy-blog-api
       WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/hxy-blog-web
       HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -43,6 +47,7 @@ jobs:
 
       - name: 登录 GHCR
         env:
+          # GITHUB_TOKEN 是 GitHub 为本次 Job 临时签发的短期令牌，不是长期 PAT。
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
@@ -50,8 +55,10 @@ jobs:
       - name: 构建 linux/amd64 镜像
         run: |
           set -eu
+          # sha-<完整 Commit> 是人可读的不可变标签，main 只是便于浏览的指针。
           immutable_tag="sha-${HEAD_SHA}"
 
+          # 生产服务器是 amd64；显式指定平台可避免开发机架构影响产物。
           docker build \
             --platform linux/amd64 \
             --build-arg VERSION="$immutable_tag" \
@@ -87,12 +94,15 @@ jobs:
           api_digest="$(docker buildx imagetools inspect "${API_IMAGE}:${immutable_tag}" | awk '$1 == "Digest:" { print $2; exit }')"
           web_digest="$(docker buildx imagetools inspect "${WEB_IMAGE}:${immutable_tag}" | awk '$1 == "Digest:" { print $2; exit }')"
 
+          # Digest 为空时禁止继续部署，避免服务器收到不完整发布参数。
           test -n "$api_digest"
           test -n "$web_digest"
 
+          # GITHUB_OUTPUT 把值安全传给 needs.publish.outputs，不需要重复解析日志。
           echo "api_digest=${api_digest}" >> "$GITHUB_OUTPUT"
           echo "web_digest=${web_digest}" >> "$GITHUB_OUTPUT"
 
+          # GITHUB_STEP_SUMMARY 只展示非敏感发布元数据，便于人工审批时核对。
           {
             echo '## GHCR 发布结果'
             echo
@@ -110,6 +120,7 @@ jobs:
     permissions:
       contents: read
     environment:
+      # Environment 同时提供人工批准门禁、受保护分支限制和生产 Secrets。
       name: production
     env:
       HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -124,6 +135,7 @@ jobs:
       - name: 准备受限 SSH 凭据
         run: |
           set -eu
+          # Runner 是一次性的；仍使用 0700/0600，避免 SSH 因权限过宽而拒绝密钥。
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy_key"
           printf '%s\n' "$DEPLOY_HOST_KEY" > "$HOME/.ssh/known_hosts"
@@ -132,6 +144,8 @@ jobs:
       - name: 调用服务器固定部署入口
         run: |
           set -eu
+          # BatchMode 禁止交互式密码；IdentitiesOnly 禁止尝试其他密钥；
+          # StrictHostKeyChecking 防止连接到伪造主机。服务器端公钥还绑定了强制命令。
           ssh \
             -o BatchMode=yes \
             -o IdentitiesOnly=yes \

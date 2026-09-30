@@ -8,11 +8,13 @@ import (
 )
 
 func TestHealth(t *testing.T) {
+	// httptest 在内存中构造请求与响应，测试的是完整 Handler 行为而非内部函数细节。
 	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	response := httptest.NewRecorder()
 
 	newHandler().ServeHTTP(response, request)
 
+	// 状态码、内容类型和响应体共同组成对 Nginx、Compose 与 CD 的健康契约。
 	if response.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
 	}
@@ -25,6 +27,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestUnknownRoute(t *testing.T) {
+	// 未注册 API 必须返回标准 404，不能被错误地当成 SPA 页面或健康请求。
 	request := httptest.NewRequest(http.MethodGet, "/api/unknown", nil)
 	response := httptest.NewRecorder()
 

@@ -1,4 +1,5 @@
 {
+  // 根配置不直接编译文件，只把应用与构建工具拆成两个可增量检查的项目。
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },

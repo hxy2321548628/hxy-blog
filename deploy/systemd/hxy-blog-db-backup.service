@@ -1,12 +1,18 @@
 [Unit]
 Description=hxy-blog MySQL backup and COS verification
+# Docker 提供 MySQL 容器，network-online 提供 COS 网络；After 只规定顺序，
+# Wants 会把 network-online.target 一起拉起但不会形成强依赖失败链。
 After=docker.service network-online.target
 Wants=network-online.target
 
 [Service]
+# oneshot 表示命令执行完成后服务即结束，适合由 Timer 周期触发的批处理。
+# 系统级 Unit 未声明 User 时默认以 root 运行，满足读取 root 专属备份凭据的要求。
 Type=oneshot
 ExecStart=/usr/local/sbin/hxy-blog-db-backup-current
+# 备份含上传和回读，允许最长 30 分钟，但超时后由 systemd 标记失败。
 TimeoutStartSec=30min
+# 降低 CPU 和磁盘调度优先级，避免备份明显影响前台博客请求。
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7

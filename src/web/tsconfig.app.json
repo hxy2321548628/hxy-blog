@@ -1,22 +1,28 @@
 {
   "compilerOptions": {
+    // 输出语法和浏览器标准库基于 ES2022，同时包含 DOM 类型。
     "target": "ES2022",
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // 应用源码只接受 TypeScript；第三方声明文件不重复做内部类型检查。
     "allowJs": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+    // strict 是类型安全总开关；大小写检查避免 Linux/Windows 文件名差异。
     "strict": true,
     "forceConsistentCasingInFileNames": true,
+    // 模块解析交给 Vite，因此使用 Bundler 规则且不由 tsc 输出文件。
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    // 新 JSX 运行时无需在每个组件中显式 import React。
     "jsx": "react-jsx",
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
+  // 只检查应用源码；Vite 配置由独立的 node tsconfig 负责。
   "include": ["src"]
 }

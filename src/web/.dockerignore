@@ -1,6 +1,8 @@
+# 前端镜像只需要源码、package.json 和 lockfile；不得把本地环境或依赖目录打包。
 .git
 .env
 .env.*
+# dist 会在容器内重新构建，node_modules 必须由 npm ci 按锁文件重新安装。
 dist
 node_modules
 *.log

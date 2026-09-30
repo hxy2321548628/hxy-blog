@@ -1,0 +1,70 @@
+# 代码阅读指南
+
+本指南解释项目各入口如何协作。源码中的中文注释重点说明局部设计原因；这里提供跨文件的整体路径。建议先在仓库根目录运行 `make` 或 `make help` 查看可执行命令。
+
+## 推荐阅读顺序
+
+1. `Makefile`：理解本地开发与提交前门禁。
+2. `src/backend/cmd/api` 与 `src/web/src`：理解最小应用请求链。
+3. `deploy/compose.yaml`、两个 Dockerfile 和 `src/web/nginx.conf`：理解容器如何组成运行环境。
+4. `.github/workflows/ci.yml`：理解 PR 为什么能阻止有问题的代码合并。
+5. `.github/workflows/release.yml` 与 `deploy/scripts/deploy.sh`：理解合并后如何发布和回滚。
+6. `deploy/scripts/backup-db.sh`、`sync-backup-cos.sh` 和 `restore-drill.sh`：理解数据保护闭环。
+
+## 请求链
+
+```text
+浏览器
+  ├─ /assets、页面路由 ──> Nginx ──> React 静态文件
+  └─ /api/* ───────────> Nginx ──> Go API
+                                      └─ 后续业务请求 ──> MySQL / COS
+```
+
+开发时 Vite 代替 Nginx 代理 `/api`；生产时 Nginx 使用 Compose 服务名 `api` 转发。前端始终请求相对路径，因此不需要在业务代码中判断环境。
+
+## CI/CD 链
+
+```text
+Pull Request
+  └─ CI check：格式、测试、构建、迁移、容器冒烟
+       └─ 合并 main
+            └─ main CI 再验证
+                 └─ Release 发布 GHCR Digest
+                      └─ 人工批准 production
+                           └─ 受限 SSH → 备份 → Goose up → 切换 → 健康检查/回滚
+```
+
+Tag 方便人阅读，但可能移动；Digest 由镜像内容计算，不会移动，因此生产部署只接受 Digest。部署服务器不能通过受限 SSH 执行任意命令，也不会现场构建源码。
+
+## 数据保护链
+
+部署和每日 Timer 都复用同一备份脚本：`mysqldump` 一致性快照 → gzip → SHA-256 → COS 上传 → 立即回读复验。本地恢复演练只导入 `hxy_blog_restore_drill` 隔离库，退出时删除隔离库，不覆盖生产库。
+
+## Shell 脚本常见写法
+
+- `set -Eeuo pipefail`：命令失败、未定义变量或管道中任一命令失败时停止；`-E` 让错误陷阱在函数中继续生效。
+- `umask 077`：新文件默认只有当前用户可访问，适合备份和密钥配置。
+- `readonly`：启动后不允许意外改写路径、安全常量或参数。
+- `trap ... EXIT`：无论成功还是失败都清理临时文件或隔离数据库。
+- `flock -n`：用非阻塞文件锁拒绝并发部署、备份或恢复，而不是让任务无限等待。
+- `exec`：用目标进程替换当前 Shell，使 systemd、SSH 或 Actions 得到真实退出码和信号行为。
+- `realpath` 加目录前缀检查：先消除 `..` 和符号路径，再确认输入仍位于允许目录中。
+
+## Make 常见写法
+
+- `target: dependency`：执行目标前先执行依赖；`check` 因此可以组合多道独立门禁。
+- `:=`：解析 Makefile 时立即计算；`?=`：只有外部没有提供值时才使用默认值。
+- `$(VAR)`：Make 变量；Shell 命令中的 `$$` 会转换为单个 `$` 后再交给 Shell。
+- 命令前的 `@`：执行但不回显命令本身，适合 `help` 这类只关心输出的目标。
+- `.PHONY`：声明动作目标，避免同名文件让 Make 误判为“已经完成”。
+
+## 不能直接添加注释的文件
+
+- `package.json`：标准 JSON。`scripts` 分别提供开发、构建、Lint 和组合检查命令；依赖版本由 `package-lock.json` 精确锁定。
+- `package-lock.json`、`go.sum`：包管理器生成的完整性清单，不手工修改。
+- `deploy/cam/cos-backup-policy.json`：腾讯云 CAM 标准 JSON，字段解释位于 [`deploy/cam/README.md`](../../deploy/cam/README.md)。
+- `go.mod`：Go 模块清单。直接依赖位于第一组，工具解析出的间接依赖位于第二组。
+
+## 阅读注释时的原则
+
+注释解释“为什么”和边界条件，代码表达“怎么做”。如果注释与可执行代码冲突，以测试和代码为准，并在同一个 PR 中修正失真的注释。
