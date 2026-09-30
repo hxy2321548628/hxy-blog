@@ -23,6 +23,8 @@
 
 开发时 Vite 代替 Nginx 代理 `/api`；生产时 Nginx 使用 Compose 服务名 `api` 转发。前端始终请求相对路径，因此不需要在业务代码中判断环境。
 
+访客文章列表遵循 `React 页面 → RTK Query → Axios → Gin Handler → Post Service → GORM Repository → MySQL` 的单一路径。Handler 只校验分页和转换响应，Repository 负责“仅已发布、按发布时间倒序”的持久化语义。
+
 ## CI/CD 链
 
 ```text
