@@ -22,8 +22,20 @@
 - 媒体存储决策：`doc/architecture/0002-media-storage.md`
 - 应用技术栈：`doc/architecture/0003-application-stack.md`
 - 管理员鉴权：`doc/architecture/0004-authentication.md`
+- 持续交付：`doc/architecture/0005-continuous-delivery.md`
 - 异地备份：`doc/architecture/0006-offsite-database-backup.md`
+- 生产运维手册：`doc/engineering/production-deployment.md`
 - 产品待办：`doc/product/backlog.md`
+
+## 学习与复盘文档
+
+以下文档用于理解工程基线的原理，不作为实施约束；修改 CI/CD、服务器或备份链路前建议先读对应章节。
+
+- Sprint 0 复盘：`doc/engineering/sprint-0-retrospective.md`
+- AI 项目工程化解析：`doc/engineering/ai-engineering-deep-dive.md`
+- CI/CD 深度解析：`doc/engineering/ci-cd-deep-dive.md`
+- 云服务器与生产运维：`doc/engineering/cloud-server-operations.md`
+- 排错记录与常见问题：`doc/engineering/troubleshooting-and-faq.md`
 
 ## 目录边界
 
