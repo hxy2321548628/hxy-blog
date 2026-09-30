@@ -1,0 +1,83 @@
+name: hxy-blog-production
+
+# 生产日志设置上限，避免单机磁盘被容器日志耗尽。
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  mysql:
+    image: ${MYSQL_IMAGE:-mysql:8.0@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --innodb-buffer-pool-size=268435456
+      - --max-connections=50
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?生产环境必须设置 MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER:?生产环境必须设置 MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?生产环境必须设置 MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?生产环境必须设置 MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    mem_limit: 768m
+    logging: *default-logging
+
+  api:
+    # 部署脚本只接受固定 GHCR 仓库的 sha256 Digest。
+    image: ${API_IMAGE:?部署时必须设置 API_IMAGE Digest}
+    environment:
+      HTTP_ADDR: :8080
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?生产环境必须设置 MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER:?生产环境必须设置 MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?生产环境必须设置 MYSQL_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    expose:
+      - "8080"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    mem_limit: 256m
+    stop_grace_period: 15s
+    logging: *default-logging
+
+  web:
+    image: ${WEB_IMAGE:?部署时必须设置 WEB_IMAGE Digest}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      # ICP 备案与 TLS 入口就绪前，生产站点仍只允许服务器本机访问。
+      - 127.0.0.1:${WEB_BIND_PORT:-8080}:8080
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    mem_limit: 128m
+    logging: *default-logging
+
+volumes:
+  mysql_data:
