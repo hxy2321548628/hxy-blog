@@ -1,0 +1,12 @@
+[Unit]
+Description=Run hxy-blog MySQL backup every day
+
+[Timer]
+# 上海时区每日 03:30 执行，错过时在下次开机后补跑。
+OnCalendar=*-*-* 03:30:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=10min
+Unit=hxy-blog-db-backup.service
+
+[Install]
+WantedBy=timers.target

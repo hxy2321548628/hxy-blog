@@ -1,0 +1,22 @@
+cos:
+  base:
+    secretid: ""
+    secretkey: ""
+    sessiontoken: ""
+    protocol: https
+    servicedomain: ""
+    mode: CvmRole
+    cvmrolename: HxyBlogBackupRole
+    closeautoswitchhost: "false"
+    # 配置中不保存长期密钥，COSCLI 会从 CVM 实例元数据获取临时凭证。
+    disableencryption: "true"
+    # 指定 COS 类型，避免为自动探测额外授予 HeadBucket 权限。
+    disableautofetchbuckettype: "true"
+    proxy: ""
+  buckets:
+    - name: hxy-blog-backup-1497610660
+      alias: hxy-backup
+      region: ap-nanjing
+      endpoint: cos.ap-nanjing.myqcloud.com
+      ofs: false
+      customized: false

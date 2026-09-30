@@ -36,7 +36,8 @@ container-production-config:
 	docker compose --env-file .env.example -f deploy/compose.production.yaml config --quiet
 
 check-deploy:
-	bash -n deploy/scripts/deploy.sh deploy/scripts/ssh-entry.sh deploy/scripts/backup-db.sh deploy/scripts/restore-drill.sh
+	bash -n deploy/scripts/deploy.sh deploy/scripts/ssh-entry.sh deploy/scripts/backup-db.sh deploy/scripts/restore-drill.sh deploy/scripts/install-coscli.sh deploy/scripts/sync-backup-cos.sh deploy/scripts/fetch-backup-cos.sh deploy/scripts/backup-current-db.sh
+	python3 -m json.tool deploy/cam/cos-backup-policy.json >/dev/null
 
 container-build:
 	$(COMPOSE_EXAMPLE) build
