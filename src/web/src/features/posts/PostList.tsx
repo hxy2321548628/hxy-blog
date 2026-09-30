@@ -21,7 +21,7 @@ function PostList({ items }: PostListProps) {
       {items.map((item) => (
         <li key={item.slug} className="post-list__item">
           <article>
-            <time dateTime={item.publishedAt}>
+            <time className="post-meta" dateTime={item.publishedAt}>
               {dateFormatter.format(new Date(item.publishedAt))}
             </time>
             <h2>{item.title}</h2>
