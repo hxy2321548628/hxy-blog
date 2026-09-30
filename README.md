@@ -15,6 +15,7 @@
 make setup
 cp .env.example .env
 make dev-db
+make dev-migrate
 make dev-backend
 make dev-web
 ```
@@ -36,7 +37,7 @@ make container-build
 make container-up
 ```
 
-Web 默认通过 `http://127.0.0.1:8080` 访问，并把 `/api` 请求转发到 Go API。生产环境由 CD 使用 GHCR 镜像 Digest 覆盖本地镜像名，不在服务器拉取源码或执行构建。
+Web 默认通过 `http://127.0.0.1:8080` 访问，并把 `/api` 请求转发到 Go API。`make container-up` 会在启动 API/Web 前先等待 MySQL 并执行 Goose up。生产环境由 CD 使用 GHCR 镜像 Digest 覆盖本地镜像名，不在服务器拉取源码或执行构建。
 
 ## 质量检查
 
