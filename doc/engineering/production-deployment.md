@@ -14,8 +14,12 @@ GitHub Actions 只能通过专用 SSH 密钥调用固定部署入口，不能获
 | 固定 SSH 入口 | `/usr/local/sbin/hxy-blog-ssh-entry` |
 | root 部署入口 | `/usr/local/sbin/hxy-blog-deploy` |
 | root 备份入口 | `/usr/local/sbin/hxy-blog-db-backup` |
+| root COS 同步入口 | `/usr/local/sbin/hxy-blog-db-sync` |
+| root COS 取回入口 | `/usr/local/sbin/hxy-blog-db-fetch` |
+| root 定时备份入口 | `/usr/local/sbin/hxy-blog-db-backup-current` |
 | root 恢复演练入口 | `/usr/local/sbin/hxy-blog-db-restore-drill` |
 | 即时备份目录 | `/var/backups/hxy-blog/mysql`，root:root `0700` |
+| COSCLI 配置 | `/etc/hxy-blog/cos-backup.yaml`，root:root `0600` |
 | 生产端口 | 仅 `127.0.0.1:8080`，备案完成前不开放 80/443 |
 
 部署公钥必须使用 `restrict` 和强制命令：
@@ -57,8 +61,11 @@ Environment 只允许受保护的 `main` 分支部署，并要求人工批准。
 ## 备份和恢复演练
 
 - 每次部署在 Goose `up` 前创建一份 root 专属的 gzip 逻辑备份和 SHA-256 校验文件。
+- 备份和校验文件会写入 COS `hxy-blog-backup-1497610660/mysql/`，上传后立即回读并重新校验。
+- Lighthouse 使用仅启用编程访问的专用 CAM 子用户 `hxy-blog-backup`，SecretId/SecretKey 只保存在 root 可读的 COSCLI 配置中。
+- 每日 03:30（Asia/Shanghai）由 systemd timer 补充执行一次备份，最多随机延迟 10 分钟。
 - 单机目录只保留最近七份即时备份；被轮换的旧文件无法从服务器恢复。
-- 即时备份不能替代异机备份，正式公网开放前仍需接入服务器之外的加密存储。
+- COS `mysql/` 前缀保留 90 天，专用子用户没有删除远端对象的权限。
 - 恢复演练只导入固定隔离库 `hxy_blog_restore_drill`，完成校验后自动删除，不覆盖生产库。
 
 管理员可在服务器执行：
@@ -69,6 +76,47 @@ sudo /usr/local/sbin/hxy-blog-db-restore-drill \
 ```
 
 演练会先验证 SHA-256 和 gzip 完整性，再输出恢复后的表数量和 Goose 版本。生产库的破坏性恢复不通过 GitHub 部署密钥开放，也不在无人值守脚本中自动执行。
+
+### COS 首次安装
+
+1. 用 [`deploy/cam/cos-backup-policy.json`](../../deploy/cam/cos-backup-policy.json) 创建 `HxyBlogBackupPolicy`，只关联到专用 CAM 子用户 `hxy-blog-backup`。
+2. 子用户只启用编程访问，不启用控制台登录；密钥不得进入 GitHub、聊天、Shell 历史或命令行参数。
+3. 安装固定版本 COSCLI 和脚本，再从交互式终端隐藏输入密钥：
+
+```bash
+sudo ./deploy/scripts/install-coscli.sh
+sudo install -o root -g root -m 755 deploy/scripts/configure-coscli.sh /usr/local/sbin/hxy-blog-cos-configure
+sudo install -o root -g root -m 755 deploy/scripts/sync-backup-cos.sh /usr/local/sbin/hxy-blog-db-sync
+sudo install -o root -g root -m 755 deploy/scripts/fetch-backup-cos.sh /usr/local/sbin/hxy-blog-db-fetch
+sudo install -o root -g root -m 755 deploy/scripts/backup-current-db.sh /usr/local/sbin/hxy-blog-db-backup-current
+sudo install -o root -g root -m 755 deploy/scripts/backup-db.sh /usr/local/sbin/hxy-blog-db-backup
+sudo install -o root -g root -m 644 deploy/systemd/hxy-blog-db-backup.service /etc/systemd/system/hxy-blog-db-backup.service
+sudo install -o root -g root -m 644 deploy/systemd/hxy-blog-db-backup.timer /etc/systemd/system/hxy-blog-db-backup.timer
+sudo systemctl daemon-reload
+sudo /usr/local/sbin/hxy-blog-cos-configure
+```
+
+4. 先手工执行一次任务，完成 COS 上传、回读和隔离库恢复验证，再启用定时器：
+
+```bash
+sudo systemctl start hxy-blog-db-backup.service
+sudo journalctl -u hxy-blog-db-backup.service --since today --no-pager
+sudo systemctl enable --now hxy-blog-db-backup.timer
+systemctl list-timers hxy-blog-db-backup.timer --no-pager
+```
+
+### 从 COS 取回并演练恢复
+
+COS 取回入口只接受规范备份文件名，会同时下载 `.sha256` 并校验：
+
+```bash
+sudo /usr/local/sbin/hxy-blog-db-fetch \
+  20260930T033000Z-sha-0123456789ab.sql.gz
+sudo /usr/local/sbin/hxy-blog-db-restore-drill \
+  /var/backups/hxy-blog/mysql/20260930T033000Z-sha-0123456789ab.sql.gz
+```
+
+生产数据恢复仍属于人工故障处理，不由上述脚本自动覆盖。
 
 ## 备案期限制
 

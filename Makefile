@@ -36,7 +36,10 @@ container-production-config:
 	docker compose --env-file .env.example -f deploy/compose.production.yaml config --quiet
 
 check-deploy:
-	bash -n deploy/scripts/deploy.sh deploy/scripts/ssh-entry.sh deploy/scripts/backup-db.sh deploy/scripts/restore-drill.sh
+	bash -n deploy/scripts/deploy.sh deploy/scripts/ssh-entry.sh deploy/scripts/backup-db.sh deploy/scripts/restore-drill.sh deploy/scripts/install-coscli.sh deploy/scripts/configure-coscli.sh deploy/scripts/sync-backup-cos.sh deploy/scripts/fetch-backup-cos.sh deploy/scripts/backup-current-db.sh
+	bash -c '[[ "20260930T032152Z-sha-8aa51a66049e.sql.gz" =~ ^[0-9]{8}T[0-9]{6}([0-9]{9})?Z-sha-[0-9a-f]{12}\.sql\.gz$$ ]]'
+	bash -c '[[ "20260930T032152643485203Z-sha-8aa51a66049e.sql.gz" =~ ^[0-9]{8}T[0-9]{6}([0-9]{9})?Z-sha-[0-9a-f]{12}\.sql\.gz$$ ]]'
+	python3 -m json.tool deploy/cam/cos-backup-policy.json >/dev/null
 
 container-build:
 	$(COMPOSE_EXAMPLE) build

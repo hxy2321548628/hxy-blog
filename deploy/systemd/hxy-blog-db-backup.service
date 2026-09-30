@@ -1,0 +1,12 @@
+[Unit]
+Description=hxy-blog MySQL backup and COS verification
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hxy-blog-db-backup-current
+TimeoutStartSec=30min
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

@@ -5,6 +5,7 @@ umask 077
 
 readonly BACKUP_DIR=/var/backups/hxy-blog/mysql
 readonly BACKUP_LOCK=/run/lock/hxy-blog-db-backup.lock
+readonly SYNC_SCRIPT=/usr/local/sbin/hxy-blog-db-sync
 readonly RETAINED_BACKUPS=7
 
 fail() {
@@ -23,6 +24,8 @@ fi
 for command_name in docker gzip sha256sum flock; do
   command -v "${command_name}" >/dev/null || fail "缺少命令 ${command_name}"
 done
+[[ -x ${SYNC_SCRIPT} ]] || fail "缺少 ${SYNC_SCRIPT}"
+[[ $(stat -c '%u' "${SYNC_SCRIPT}") == 0 ]] || fail "${SYNC_SCRIPT} 必须由 root 拥有"
 
 exec 9>"${BACKUP_LOCK}"
 flock -n 9 || fail '已有数据库备份正在执行'
@@ -75,7 +78,10 @@ install -o root -g root -m 600 "${archive_file}" "${archive_path}"
   chmod 600 "${archive_name}.sha256"
 )
 
-# 单机即时备份只保留最近七份，异机备份另行建设。
+# 先完成 COS 异地副本和回读校验，再轮换服务器本地旧备份。
+"${SYNC_SCRIPT}" "${archive_path}"
+
+# 服务器本地只保留最近七份，COS 由存储桶生命周期单独管理。
 mapfile -t backups < <(
   find "${BACKUP_DIR}" -maxdepth 1 -type f -name '*.sql.gz' -printf '%f\n' | sort --reverse
 )
