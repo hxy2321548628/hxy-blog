@@ -41,31 +41,48 @@ src/backend/go.sum          ← 依赖清单的真实位置
 
 所以不是“缺少 go.sum”，而是**缓存键的查找路径不对**。这解释了为什么这个警告在依赖清单早已提交后依然存在。
 
-**影响**：仅导致 Go 依赖缓存无法命中，每次 CI 都要重新下载模块（浪费时间，不影响正确性）。属于**待修复项**。
+**影响**：仅导致 Go 依赖缓存无法命中，每次 CI 都要重新下载模块（浪费时间，不影响正确性）。
 
-**修复方向**（本 PR 只记录，不改工作流）：
+**修复**：显式声明依赖清单路径。
 
 ```yaml
-- uses: actions/setup-go@v5
+- uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
   with:
     go-version-file: src/backend/go.mod
     cache: true
     cache-dependency-path: src/backend/go.sum   # 显式指定
 ```
 
-注意前端那一步已经正确处理了同类问题：`setup-node` 显式写了 `cache-dependency-path: src/web/package-lock.json`。Go 这步缺了对应配置——**同一个工作流里两个工具，一个配了一个没配**。
+注意前端那一步一直是对的：`setup-node` 显式写了 `cache-dependency-path: src/web/package-lock.json`。Go 这步缺了对应配置——**同一个工作流里两个工具，一个配了一个没配**。这类"相邻两步不对称"是排查配置类问题的有效线索。
 
 **沉淀的认知**：默认值只在“目录结构符合默认假设”时成立。仓库使用子目录布局时，所有按路径推断的配置都要显式声明。同时，非阻断警告要记录并排期修复，因为警告会训练人忽略 CI 输出。
 
 ### 3. GitHub Actions 的 Node.js 20 运行时弃用警告
 
-**现象**：CI 输出 `Node.js 20 actions are deprecated`。
+**现象**：CI 输出：
 
-**根因**：某些 Action 的版本仍在 Node 20 运行时上。
+```text
+Node.js 20 is deprecated. The following actions target Node.js 20 but are being
+forced to run on Node.js 24: actions/checkout@v4, actions/setup-go@v5, actions/setup-node@v4
+```
 
-**影响**：仅警告，不影响功能。
+**根因**：这些 Action 的主版本仍声明 Node 20 运行时。GitHub 已经在 Runner 上强制以 Node 24 执行，所以只是警告——但**下线和强制行为会随时变化**。
 
-**处理**：记录为待办，随 Action 版本升级一起解决，而不是为了消警告而随意改版本。CI 中**第三方 Action 必须固定到完整 Commit SHA**（如 `actions/checkout@d23441a4…`），因为标签可能被移动，这是供应链风险。
+**修复**：升级到声明新运行时的主版本，并固定到完整 Commit SHA：
+
+| Action | 修复前 | 修复后 |
+| --- | --- | --- |
+| `actions/checkout` | `@v4` | `@3d3c42e5… # v7.0.1` |
+| `actions/setup-go` | `@v5` | `@b7ad1dad… # v7.0.0` |
+| `actions/setup-node` | `@v4` | `@82076278… # v7.0.0` |
+
+升级前核对过 v7 的 `action.yml`，确认本项目用到的输入（`go-version-file`、`cache`、`cache-dependency-path`、`node-version`）在 v7 中仍然存在；v7 的主要变化是迁移到 ESM 并升级依赖，没有影响工作流输入。
+
+**为什么要固定 SHA 而不是写 `@v7`**：标签是可变指针，上游可以把 `v7` 指向任意提交。固定到完整 Commit SHA 后，**你审查过的代码就是实际执行的代码**，这是供应链防护的基本要求。本项目两个工作流都已统一为固定 SHA。
+
+**残留警告（已记录，暂不处理）**：`ubuntu-latest` 标签将迁移到 Ubuntu 26。这属于运行器镜像迁移，需要单独评估构建与 Docker 行为，不与本次缓存/运行时修复混合。
+
+**沉淀的认知**：不为消警告而随意改版本——升级前必须核对新版本的输入契约是否仍兼容，升级后用 CI 实测验证。同时，非阻断警告要记录并排期，因为警告会训练人忽略 CI 输出。
 
 ### 4. 服务器无法访问 github.com
 
