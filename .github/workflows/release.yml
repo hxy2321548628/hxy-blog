@@ -12,10 +12,9 @@ concurrency:
   group: release-main
   cancel-in-progress: false
 
-# Release 只需要读取源码并向 GHCR 写入镜像。
+# 默认只读；只有 publish Job 可以写入 Packages。
 permissions:
   contents: read
-  packages: write
 
 jobs:
   publish:
@@ -26,13 +25,19 @@ jobs:
       github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      api_digest: ${{ steps.digests.outputs.api_digest }}
+      web_digest: ${{ steps.digests.outputs.web_digest }}
     env:
       API_IMAGE: ghcr.io/${{ github.repository_owner }}/hxy-blog-api
       WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/hxy-blog-web
       HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
       # 必须检出通过 CI 的精确提交，不能隐式使用此时的 main HEAD。
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
@@ -46,6 +51,12 @@ jobs:
         run: |
           set -eu
           immutable_tag="sha-${HEAD_SHA}"
+
+          # Goose 尚未接入部署流程前，禁止静默发布任何迁移文件。
+          if [ -d src/backend/migrations ] && find src/backend/migrations -type f -print -quit | grep --quiet .; then
+            echo '检测到数据库迁移，但部署前备份与 Goose 门禁尚未实现。' >&2
+            exit 1
+          fi
 
           docker build \
             --platform linux/amd64 \
@@ -75,6 +86,7 @@ jobs:
           docker push "${WEB_IMAGE}:main"
 
       - name: 记录发布 Digest
+        id: digests
         run: |
           set -eu
           immutable_tag="sha-${HEAD_SHA}"
@@ -84,6 +96,9 @@ jobs:
           test -n "$api_digest"
           test -n "$web_digest"
 
+          echo "api_digest=${api_digest}" >> "$GITHUB_OUTPUT"
+          echo "web_digest=${web_digest}" >> "$GITHUB_OUTPUT"
+
           {
             echo '## GHCR 发布结果'
             echo
@@ -92,3 +107,43 @@ jobs:
             echo "| API | \`${immutable_tag}\` | \`${api_digest}\` |"
             echo "| Web | \`${immutable_tag}\` | \`${web_digest}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: 部署到腾讯云生产环境
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    environment:
+      name: production
+    env:
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      API_DIGEST: ${{ needs.publish.outputs.api_digest }}
+      WEB_DIGEST: ${{ needs.publish.outputs.web_digest }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_HOST_KEY: ${{ secrets.DEPLOY_HOST_KEY }}
+    steps:
+      - name: 准备受限 SSH 凭据
+        run: |
+          set -eu
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$DEPLOY_HOST_KEY" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"
+
+      - name: 调用服务器固定部署入口
+        run: |
+          set -eu
+          ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -i "$HOME/.ssh/deploy_key" \
+            -p "$DEPLOY_PORT" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "deploy ${HEAD_SHA} ${API_DIGEST} ${WEB_DIGEST}"

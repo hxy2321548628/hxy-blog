@@ -1,4 +1,4 @@
-.PHONY: setup fmt fmt-check vet test test-go check check-web container-config container-build container-up container-down dev-backend dev-web dev-db
+.PHONY: setup fmt fmt-check vet test test-go check check-web check-deploy container-config container-production-config container-build container-up container-down dev-backend dev-web dev-db
 
 WEB_DIR := src/web
 GOCACHE ?= $(CURDIR)/.cache/go-build
@@ -27,10 +27,16 @@ test: test-go
 check-web:
 	npm --prefix $(WEB_DIR) run check
 
-check: fmt-check vet test check-web container-config
+check: fmt-check vet test check-web container-config container-production-config check-deploy
 
 container-config:
 	$(COMPOSE_EXAMPLE) config --quiet
+
+container-production-config:
+	docker compose --env-file .env.example -f deploy/compose.production.yaml config --quiet
+
+check-deploy:
+	bash -n deploy/scripts/deploy.sh deploy/scripts/ssh-entry.sh
 
 container-build:
 	$(COMPOSE_EXAMPLE) build
