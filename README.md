@@ -51,3 +51,17 @@ make check
 ## 工程规范
 
 从 [AGENTS.md](./AGENTS.md) 开始阅读。它会引导人和 AI 找到技术章程、代码规范、Git 规范、敏捷流程和架构决策。
+
+## 文档导航
+
+| 想了解什么 | 读哪一份 |
+| --- | --- |
+| 项目约束与 AI 协作入口 | [AGENTS.md](./AGENTS.md) |
+| 架构决策（为什么这样选） | [doc/architecture/](./doc/architecture/) |
+| 生产部署与运维操作 | [生产部署运行手册](./doc/engineering/production-deployment.md) |
+| Sprint 0 做了什么、为什么 | [Sprint 0 复盘](./doc/engineering/sprint-0-retrospective.md) |
+| AI 项目工程化原理 | [AI 项目工程化深度解析](./doc/engineering/ai-engineering-deep-dive.md) |
+| CI/CD 全链路原理 | [CI/CD 深度解析](./doc/engineering/ci-cd-deep-dive.md) |
+| 云服务器与备份运维 | [云服务器与生产运维](./doc/engineering/cloud-server-operations.md) |
+| 踩过的坑与常见问题 | [排错记录与常见问题](./doc/engineering/troubleshooting-and-faq.md) |
+| 需求状态与 Sprint 计划 | [产品 Backlog](./doc/product/backlog.md) |
