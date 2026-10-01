@@ -23,6 +23,11 @@ func TestInitialSchemaEnforcesContentAndSessionRules(t *testing.T) {
 	}
 	// 测试数据只在事务中存在，避免污染开发者或 CI 的迁移数据库。
 	t.Cleanup(func() { _ = transaction.Rollback() })
+	// 单管理员约束要求测试先在事务内隔离既有数据；回滚会完整恢复本地管理员和会话。
+	deleteRefreshTokensInDependencyOrder(t, transaction)
+	if _, err := transaction.Exec("DELETE FROM admins"); err != nil {
+		t.Fatalf("isolate administrators: %v", err)
+	}
 
 	assertTableStorage(t, transaction, "posts")
 	assertTableStorage(t, transaction, "admins")
@@ -40,6 +45,10 @@ func TestInitialSchemaEnforcesContentAndSessionRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read administrator id: %v", err)
 	}
+	// MVP 只允许一个管理员；数据库约束必须覆盖并发初始化，不能只依赖应用先 count。
+	assertInsertFails(t, transaction, 1062, `
+		INSERT INTO admins (username, password_hash, created_at, updated_at)
+		VALUES ('second-admin', '$argon2id$integration-test-hash', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))`)
 
 	now := time.Now().UTC()
 	_, err = transaction.Exec(`
@@ -115,6 +124,27 @@ func TestInitialSchemaEnforcesContentAndSessionRules(t *testing.T) {
 		) VALUES (18446744073709551615, UNHEX(REPEAT('66', 32)), UNHEX(REPEAT('77', 16)), NULL,
 			DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 1 DAY),
 			DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 2 DAY), NULL, NULL, UTC_TIMESTAMP(6))`)
+}
+
+func deleteRefreshTokensInDependencyOrder(t *testing.T, transaction *sql.Tx) {
+	t.Helper()
+	for {
+		result, err := transaction.Exec(`
+			DELETE token
+			FROM refresh_tokens AS token
+			LEFT JOIN refresh_tokens AS child ON child.parent_id = token.id
+			WHERE child.id IS NULL`)
+		if err != nil {
+			t.Fatalf("isolate refresh tokens: %v", err)
+		}
+		deleted, err := result.RowsAffected()
+		if err != nil {
+			t.Fatalf("read isolated refresh token count: %v", err)
+		}
+		if deleted == 0 {
+			return
+		}
+	}
 }
 
 func openIntegrationDatabase(t *testing.T) *sql.DB {
