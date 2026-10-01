@@ -111,30 +111,37 @@ func (repository *Repository) CreateDraft(ctx context.Context, input DraftInput)
 	return repository.GetAdmin(ctx, record.ID)
 }
 
-func (repository *Repository) UpdateDraft(ctx context.Context, id uint64, input DraftInput) (AdminDetail, error) {
+func (repository *Repository) Update(ctx context.Context, id uint64, input DraftInput) (AdminDetail, error) {
 	result := repository.database.WithContext(ctx).
 		Table("posts").
-		Where("id = ? AND status = ?", id, StatusDraft).
+		Where("id = ?", id).
 		Updates(map[string]any{
-			"slug": input.Slug, "title": input.Title,
+			// 已发布文章的 slug 是稳定公开地址，编辑正文时不应让旧链接失效。
+			"slug":             gorm.Expr("CASE WHEN status = ? THEN slug ELSE ? END", StatusPublished, input.Slug),
+			"title":            input.Title,
 			"content_markdown": input.ContentMarkdown, "updated_at": time.Now().UTC(),
 		})
 	if result.Error != nil {
 		if isDuplicateKey(result.Error) {
 			return AdminDetail{}, ErrSlugConflict
 		}
-		return AdminDetail{}, fmt.Errorf("update draft post: %w", result.Error)
+		return AdminDetail{}, fmt.Errorf("update post: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		detail, err := repository.GetAdmin(ctx, id)
-		if err != nil {
-			return AdminDetail{}, err
-		}
-		if detail.Status != StatusDraft {
-			return AdminDetail{}, ErrNotDraft
-		}
+		return AdminDetail{}, ErrNotFound
 	}
 	return repository.GetAdmin(ctx, id)
+}
+
+func (repository *Repository) Delete(ctx context.Context, id uint64) error {
+	result := repository.database.WithContext(ctx).Where("id = ?", id).Delete(&postRecord{})
+	if result.Error != nil {
+		return fmt.Errorf("delete post: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (repository *Repository) Publish(ctx context.Context, id uint64) (AdminDetail, error) {
@@ -179,16 +186,20 @@ func (service *Service) CreateDraft(ctx context.Context, input DraftInput) (Admi
 	return service.repository.CreateDraft(ctx, normalized)
 }
 
-func (service *Service) UpdateDraft(ctx context.Context, id uint64, input DraftInput) (AdminDetail, error) {
+func (service *Service) Update(ctx context.Context, id uint64, input DraftInput) (AdminDetail, error) {
 	normalized, err := normalizeDraft(input)
 	if err != nil {
 		return AdminDetail{}, err
 	}
-	return service.repository.UpdateDraft(ctx, id, normalized)
+	return service.repository.Update(ctx, id, normalized)
 }
 
 func (service *Service) Publish(ctx context.Context, id uint64) (AdminDetail, error) {
 	return service.repository.Publish(ctx, id)
+}
+
+func (service *Service) Delete(ctx context.Context, id uint64) error {
+	return service.repository.Delete(ctx, id)
 }
 
 func normalizeDraft(input DraftInput) (DraftInput, error) {

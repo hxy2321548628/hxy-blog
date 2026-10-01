@@ -134,7 +134,7 @@ export const postApi = createApi({
       query: (draft) => ({ url: '/admin/posts', method: 'POST', data: draft }),
       invalidatesTags: ['AdminPosts'],
     }),
-    updateDraft: builder.mutation<
+    updatePost: builder.mutation<
       AdminPostDetail,
       { id: number; draft: DraftInput }
     >({
@@ -156,15 +156,20 @@ export const postApi = createApi({
         'PublishedPosts',
       ],
     }),
+    deletePost: builder.mutation<void, number>({
+      query: (id) => ({ url: `/admin/posts/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['AdminPosts', 'PublishedPosts'],
+    }),
   }),
 })
 
 export const {
   useCreateDraftMutation,
+  useDeletePostMutation,
   useGetAdminPostQuery,
   useGetPostQuery,
   useListAdminPostsQuery,
   useListPostsQuery,
   usePublishPostMutation,
-  useUpdateDraftMutation,
+  useUpdatePostMutation,
 } = postApi

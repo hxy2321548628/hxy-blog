@@ -112,11 +112,11 @@ func TestAdministratorDraftLifecycle(t *testing.T) {
 		t.Fatalf("empty Publish() error = %v, want ErrInvalidInput", err)
 	}
 
-	updated, err := service.UpdateDraft(context.Background(), draft.ID, DraftInput{
+	updated, err := service.Update(context.Background(), draft.ID, DraftInput{
 		Slug: "first-post", Title: "第一篇文章", ContentMarkdown: "# 正文",
 	})
 	if err != nil {
-		t.Fatalf("UpdateDraft() error = %v", err)
+		t.Fatalf("Update() draft error = %v", err)
 	}
 	if updated.Slug != "first-post" || updated.ContentMarkdown != "# 正文" {
 		t.Fatalf("updated = %#v", updated)
@@ -133,15 +133,32 @@ func TestAdministratorDraftLifecycle(t *testing.T) {
 	if err != nil || public.ContentMarkdown != "# 正文" {
 		t.Fatalf("GetPublishedBySlug() = %#v, %v", public, err)
 	}
-	if _, err := service.UpdateDraft(context.Background(), draft.ID, DraftInput{
-		Slug: "changed", Title: "不能修改", ContentMarkdown: "正文",
-	}); !errors.Is(err, ErrNotDraft) {
-		t.Fatalf("published UpdateDraft() error = %v, want ErrNotDraft", err)
+	originalPublishedAt := *published.PublishedAt
+	published, err = service.Update(context.Background(), draft.ID, DraftInput{
+		Slug: "changed", Title: "发布后的新标题", ContentMarkdown: "# 发布后的新正文",
+	})
+	if err != nil {
+		t.Fatalf("Update() published error = %v", err)
+	}
+	if published.Slug != "first-post" || published.Title != "发布后的新标题" || published.ContentMarkdown != "# 发布后的新正文" {
+		t.Fatalf("published update = %#v", published)
+	}
+	if published.PublishedAt == nil || !published.PublishedAt.Equal(originalPublishedAt) {
+		t.Fatalf("publishedAt = %v, want unchanged %v", published.PublishedAt, originalPublishedAt)
 	}
 
 	items, err := service.ListAdmin(context.Background())
 	if err != nil || len(items) != 1 || items[0].Status != StatusPublished {
 		t.Fatalf("ListAdmin() = %#v, %v", items, err)
+	}
+	if err := service.Delete(context.Background(), draft.ID); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, err := service.GetAdmin(context.Background(), draft.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetAdmin() after delete error = %v, want ErrNotFound", err)
+	}
+	if err := service.Delete(context.Background(), draft.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second Delete() error = %v, want ErrNotFound", err)
 	}
 }
 
