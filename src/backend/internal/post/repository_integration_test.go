@@ -81,6 +81,70 @@ func TestRepositoryGetPublishedBySlug(t *testing.T) {
 	}
 }
 
+func TestAdministratorDraftLifecycle(t *testing.T) {
+	database := openIntegrationDatabase(t)
+	transaction := database.Begin()
+	if transaction.Error != nil {
+		t.Fatalf("begin transaction: %v", transaction.Error)
+	}
+	t.Cleanup(func() { transaction.Rollback() })
+	if err := transaction.Exec("DELETE FROM posts").Error; err != nil {
+		t.Fatalf("clear posts in transaction: %v", err)
+	}
+
+	service := NewService(NewRepository(transaction))
+	draft, err := service.CreateDraft(context.Background(), DraftInput{
+		Slug: "first-draft", Title: "第一篇草稿", ContentMarkdown: "",
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft() error = %v", err)
+	}
+	if draft.Status != StatusDraft || draft.PublishedAt != nil {
+		t.Fatalf("draft = %#v", draft)
+	}
+
+	if _, err := service.CreateDraft(context.Background(), DraftInput{
+		Slug: "first-draft", Title: "重复 slug",
+	}); !errors.Is(err, ErrSlugConflict) {
+		t.Fatalf("duplicate CreateDraft() error = %v, want ErrSlugConflict", err)
+	}
+	if _, err := service.Publish(context.Background(), draft.ID); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("empty Publish() error = %v, want ErrInvalidInput", err)
+	}
+
+	updated, err := service.UpdateDraft(context.Background(), draft.ID, DraftInput{
+		Slug: "first-post", Title: "第一篇文章", ContentMarkdown: "# 正文",
+	})
+	if err != nil {
+		t.Fatalf("UpdateDraft() error = %v", err)
+	}
+	if updated.Slug != "first-post" || updated.ContentMarkdown != "# 正文" {
+		t.Fatalf("updated = %#v", updated)
+	}
+
+	published, err := service.Publish(context.Background(), draft.ID)
+	if err != nil {
+		t.Fatalf("Publish() error = %v", err)
+	}
+	if published.Status != StatusPublished || published.PublishedAt == nil {
+		t.Fatalf("published = %#v", published)
+	}
+	public, err := service.GetPublishedBySlug(context.Background(), "first-post")
+	if err != nil || public.ContentMarkdown != "# 正文" {
+		t.Fatalf("GetPublishedBySlug() = %#v, %v", public, err)
+	}
+	if _, err := service.UpdateDraft(context.Background(), draft.ID, DraftInput{
+		Slug: "changed", Title: "不能修改", ContentMarkdown: "正文",
+	}); !errors.Is(err, ErrNotDraft) {
+		t.Fatalf("published UpdateDraft() error = %v, want ErrNotDraft", err)
+	}
+
+	items, err := service.ListAdmin(context.Background())
+	if err != nil || len(items) != 1 || items[0].Status != StatusPublished {
+		t.Fatalf("ListAdmin() = %#v, %v", items, err)
+	}
+}
+
 func openIntegrationDatabase(t *testing.T) *gorm.DB {
 	t.Helper()
 

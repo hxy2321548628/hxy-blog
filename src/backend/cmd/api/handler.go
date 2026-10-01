@@ -43,6 +43,9 @@ func newHandler(posts postService, authentication *authHTTPDependencies) http.Ha
 			authentication.config,
 			newLoginLimiter(),
 		)
+		if adminPosts, ok := posts.(adminPostService); ok {
+			registerAdminPostRoutes(router, adminPosts, authentication.tokens)
+		}
 	}
 	return router
 }
