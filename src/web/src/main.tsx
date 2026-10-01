@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Provider } from 'react-redux'
-import { BrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import App from './App'
 import { store } from './app/store'
 import './styles.css'
@@ -13,13 +13,14 @@ if (!root) {
   throw new Error('Root element not found')
 }
 
+// 数据路由保留现有页面结构，并让上传中的离开确认可以阻止误导航。
+const router = createBrowserRouter([{ path: '*', element: <App /> }])
+
 // StrictMode 仅在开发阶段额外检查副作用；生产构建不会重复渲染组件。
 createRoot(root).render(
   <StrictMode>
     <Provider store={store}>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </Provider>
   </StrictMode>,
 )

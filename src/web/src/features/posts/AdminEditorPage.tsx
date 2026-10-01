@@ -1,8 +1,10 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useCallback, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import type { ApiError } from '../../app/httpClient'
 import MarkdownContent from '../../components/MarkdownContent'
 import AdminHeader from '../auth/AdminHeader'
+import MediaUploadPanel from '../media/MediaUploadPanel'
+import { insertMarkdownImage } from '../media/markdownImage'
 import {
   useCreateDraftMutation,
   useGetAdminPostQuery,
@@ -33,10 +35,38 @@ function EditorForm({ initial }: EditorFormProps) {
   const [contentMarkdown, setContentMarkdown] = useState(
     initial?.contentMarkdown ?? '',
   )
+  const contentMarkdownRef = useRef(contentMarkdown)
   const [message, setMessage] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
+  const contentField = useRef<HTMLTextAreaElement>(null)
   const isNew = !initial
   const published = initial?.status === 'published'
+
+  const insertImage = useCallback(
+    (altText: string, url: string) => {
+      const field = contentField.current
+      const current = contentMarkdownRef.current
+      const start = field?.selectionStart ?? current.length
+      const end = field?.selectionEnd ?? start
+      const insertion = insertMarkdownImage(
+        current,
+        start,
+        end,
+        altText,
+        url,
+      )
+      contentMarkdownRef.current = insertion.value
+      setContentMarkdown(insertion.value)
+      requestAnimationFrame(() => {
+        contentField.current?.focus()
+        contentField.current?.setSelectionRange(
+          insertion.cursor,
+          insertion.cursor,
+        )
+      })
+    },
+    [],
+  )
 
   const draft = (): DraftInput => ({
     slug: slug.trim(),
@@ -126,11 +156,16 @@ function EditorForm({ initial }: EditorFormProps) {
 
         <label htmlFor="post-content">Markdown 正文</label>
         <textarea
+          ref={contentField}
           id="post-content"
           disabled={published}
           value={contentMarkdown}
-          onChange={(event) => setContentMarkdown(event.target.value)}
+          onChange={(event) => {
+            contentMarkdownRef.current = event.target.value
+            setContentMarkdown(event.target.value)
+          }}
         />
+        {!published && <MediaUploadPanel onInsertMarkdown={insertImage} />}
 
         {formError && (
           <p className="auth-form__error" role="alert">
