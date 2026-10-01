@@ -21,13 +21,29 @@ type postService interface {
 //
 // 返回 http.Handler 而不是在这里启动服务器，测试就可以用 httptest 直接调用路由，
 // 不需要占用真实端口。Gin 只停留在协议边界，业务服务不依赖 Gin 类型。
-func newHandler(posts postService) http.Handler {
+func newHandler(posts postService, authentication *authHTTPDependencies) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
+	// API 只通过同机 Nginx 暴露；不信任转发头可防止伪造来源绕过登录限流。
+	if err := router.SetTrustedProxies(nil); err != nil {
+		panic("disable trusted proxies: " + err.Error())
+	}
+	if authentication != nil {
+		router.Use(corsMiddleware(authentication.config.allowedOrigins))
+	}
 	router.Use(gin.Recovery())
 	router.GET("/api/health", healthHandler)
 	router.GET("/api/posts", listPublishedPostsHandler(posts))
 	router.GET("/api/posts/:slug", getPublishedPostHandler(posts))
+	if authentication != nil {
+		registerAuthRoutes(
+			router,
+			authentication.sessions,
+			authentication.tokens,
+			authentication.config,
+			newLoginLimiter(),
+		)
+	}
 	return router
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"hxy-blog/backend/internal/auth"
 	"hxy-blog/backend/internal/post"
 )
 
@@ -22,11 +24,37 @@ func main() {
 	defer sqlDatabase.Close()
 
 	postService := post.NewService(post.NewRepository(gormDatabase))
+	authConfig, err := loadAuthConfig(os.Getenv)
+	if err != nil {
+		slog.Error("authentication configuration failed", "error", err)
+		os.Exit(1)
+	}
+	tokenManager, err := auth.NewAccessTokenManager(authConfig.currentKey, authConfig.previousKey)
+	if err != nil {
+		slog.Error("access token initialization failed", "error", err)
+		os.Exit(1)
+	}
+	authService, err := auth.NewService(
+		context.Background(),
+		auth.NewRepository(gormDatabase),
+		auth.NewPasswordHasher(rand.Reader),
+		tokenManager,
+		rand.Reader,
+	)
+	if err != nil {
+		slog.Error("authentication service initialization failed", "error", err)
+		os.Exit(1)
+	}
+	authHTTP := &authHTTPDependencies{
+		sessions: authService,
+		tokens:   tokenManager,
+		config:   authConfig.handler,
+	}
 	// 监听地址通过环境变量注入，便于同一个二进制在本机和容器中运行。
 	addr := envOrDefault("HTTP_ADDR", ":8080")
 	server := &http.Server{
 		Addr:    addr,
-		Handler: newHandler(postService),
+		Handler: newHandler(postService, authHTTP),
 		// 限制请求头读取时间，降低慢速连接长期占用服务器资源的风险。
 		ReadHeaderTimeout: 5 * time.Second,
 		// 空闲 Keep-Alive 连接最终会被回收，避免 2C2G 单机积累无效连接。
