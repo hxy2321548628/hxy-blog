@@ -25,6 +25,11 @@ func main() {
 	defer sqlDatabase.Close()
 
 	postService := post.NewService(post.NewRepository(gormDatabase))
+	mediaService, err := buildMediaService(os.Getenv, gormDatabase)
+	if err != nil {
+		slog.Error("media configuration failed", "error", err)
+		os.Exit(1)
+	}
 	authConfig, err := loadAuthConfig(os.Getenv)
 	if err != nil {
 		slog.Error("authentication configuration failed", "error", err)
@@ -50,6 +55,7 @@ func main() {
 		sessions: authService,
 		tokens:   tokenManager,
 		config:   authConfig.handler,
+		media:    mediaService,
 	}
 	// 监听地址通过环境变量注入，便于同一个二进制在本机和容器中运行。
 	addr := envOrDefault("HTTP_ADDR", ":8080")

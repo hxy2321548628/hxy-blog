@@ -45,6 +45,7 @@ type authHTTPDependencies struct {
 	sessions authSessionService
 	tokens   accessTokenVerifier
 	config   authHandlerConfig
+	media    mediaUploadService
 }
 
 func registerAuthRoutes(
