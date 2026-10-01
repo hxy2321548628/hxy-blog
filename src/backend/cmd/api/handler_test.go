@@ -35,7 +35,7 @@ func TestHealth(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(postListStub{}).ServeHTTP(response, request)
+	newHandler(postListStub{}, nil).ServeHTTP(response, request)
 
 	// 状态码、内容类型和响应体共同组成对 Nginx、Compose 与 CD 的健康契约。
 	if response.Code != http.StatusOK {
@@ -54,7 +54,7 @@ func TestUnknownRoute(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/unknown", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(postListStub{}).ServeHTTP(response, request)
+	newHandler(postListStub{}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusNotFound)
@@ -69,7 +69,7 @@ func TestListPublishedPosts(t *testing.T) {
 	newHandler(postListStub{result: post.ListResult{
 		Items: []post.Summary{{Slug: "hello-world", Title: "Hello World", PublishedAt: publishedAt}},
 		Total: 11,
-	}}).ServeHTTP(response, request)
+	}}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
@@ -90,7 +90,7 @@ func TestListPublishedPostsRejectsInvalidPagination(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/posts?page=0&pageSize=51", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(postListStub{}).ServeHTTP(response, request)
+	newHandler(postListStub{}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusBadRequest)
@@ -104,7 +104,7 @@ func TestListPublishedPostsHidesDatabaseErrors(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/posts", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(postListStub{err: errors.New("SELECT failed with private database details")}).ServeHTTP(response, request)
+	newHandler(postListStub{err: errors.New("SELECT failed with private database details")}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusInternalServerError)
@@ -124,7 +124,7 @@ func TestGetPublishedPost(t *testing.T) {
 		Title:           "Hello World",
 		ContentMarkdown: "# 正文",
 		PublishedAt:     publishedAt,
-	}}).ServeHTTP(response, request)
+	}}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
@@ -142,7 +142,7 @@ func TestGetPublishedPostReturnsNotFoundForHiddenPost(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/posts/draft-post", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(postListStub{detailErr: post.ErrNotFound}).ServeHTTP(response, request)
+	newHandler(postListStub{detailErr: post.ErrNotFound}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusNotFound)
@@ -156,7 +156,7 @@ func TestGetPublishedPostHidesDatabaseErrors(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/posts/hello-world", nil)
 	response := httptest.NewRecorder()
 
-	newHandler(postListStub{detailErr: errors.New("SELECT failed with private database details")}).ServeHTTP(response, request)
+	newHandler(postListStub{detailErr: errors.New("SELECT failed with private database details")}, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusInternalServerError)

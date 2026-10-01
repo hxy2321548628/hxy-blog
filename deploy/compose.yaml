@@ -53,6 +53,13 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-hxy_blog}
       MYSQL_USER: ${MYSQL_USER:-hxy_blog}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?请在 .env 中设置 MYSQL_PASSWORD}
+      # 开发默认值仅服务回环地址；生产 Compose 不允许回退到示例签名密钥。
+      AUTH_JWT_CURRENT_KEY_ID: ${AUTH_JWT_CURRENT_KEY_ID:-local-development}
+      AUTH_JWT_CURRENT_KEY: ${AUTH_JWT_CURRENT_KEY:-local-development-only-key-change-me-1234567890}
+      AUTH_JWT_PREVIOUS_KEY_ID: ${AUTH_JWT_PREVIOUS_KEY_ID:-}
+      AUTH_JWT_PREVIOUS_KEY: ${AUTH_JWT_PREVIOUS_KEY:-}
+      AUTH_ALLOWED_ORIGINS: ${AUTH_ALLOWED_ORIGINS:-http://127.0.0.1:5173,http://localhost:5173,http://127.0.0.1:8080,http://localhost:8080}
+      AUTH_SECURE_COOKIE: ${AUTH_SECURE_COOKIE:-false}
     depends_on:
       # 仅按启动顺序不够；service_healthy 确保 API 启动前 MySQL 已可接受连接。
       mysql:
