@@ -46,6 +46,9 @@ func newHandler(posts postService, authentication *authHTTPDependencies) http.Ha
 		if adminPosts, ok := posts.(adminPostService); ok {
 			registerAdminPostRoutes(router, adminPosts, authentication.tokens)
 		}
+		if authentication.media != nil {
+			registerMediaRoute(router, authentication.media, authentication.tokens)
+		}
 	}
 	return router
 }
