@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"errors"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -98,6 +100,8 @@ func TestInspectImageRejectsUnsafeFiles(t *testing.T) {
 	jpegWithEXIF := encodeJPEG(t, 2, 2)
 	segment := []byte{0xff, 0xe1, 0x00, 0x08, 'E', 'x', 'i', 'f', 0, 0}
 	jpegWithEXIF = append(append(jpegWithEXIF[:2:2], segment...), jpegWithEXIF[2:]...)
+	pngWithEXIF := addPNGEXIF(t, encodePNG(t, 2, 2))
+	webpWithEXIF := addWebPEXIF(t, decodeWebPFixture(t))
 
 	tests := []struct {
 		name string
@@ -107,7 +111,9 @@ func TestInspectImageRejectsUnsafeFiles(t *testing.T) {
 		{name: "unsupported", data: []byte("not an image"), want: ErrUnsupportedFormat},
 		{name: "corrupt png", data: []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0}, want: ErrInvalidImage},
 		{name: "dimension", data: encodePNG(t, MaxDimension+1, 1), want: ErrInvalidDimensions},
-		{name: "exif", data: jpegWithEXIF, want: ErrEXIFForbidden},
+		{name: "jpeg exif", data: jpegWithEXIF, want: ErrEXIFForbidden},
+		{name: "png exif", data: pngWithEXIF, want: ErrEXIFForbidden},
+		{name: "webp exif", data: webpWithEXIF, want: ErrEXIFForbidden},
 		{name: "too large", data: bytes.Repeat([]byte{'x'}, int(MaxFileSize+1)), want: ErrTooLarge},
 	}
 	for _, test := range tests {
@@ -121,11 +127,7 @@ func TestInspectImageRejectsUnsafeFiles(t *testing.T) {
 }
 
 func TestInspectImageAcceptsWebP(t *testing.T) {
-	// 固定的无元数据 WebP 夹具避免测试依赖外部文件或额外编码器。
-	webp, err := base64.StdEncoding.DecodeString("UklGRrIBAABXRUJQVlA4TKUBAAAvSsAYAA8w//M///MfeJAkbXvaSG7m8Q3GfYSBJekwQztm/IcZlgwnmWImn2BK7aFmBtnVir6q//8VOkFE/xm4baTIu8c48ArEo6+B3zFKYln3pqClSCKX0begFTAXFOLXHSyF8cCNcZEG4OywuA4KVVfJCiArU7GAgJI8+lJP/OKMT/fBAjevg1cYB7YVkFuWga2lyPi5I0HFy5YTpWIHg0RZpkniRVW9odHAKOwosWuOGdxIyn2OvaCDvhg/we6TwadPBPbqBV58MsLmMJ8yZnOWk8SRz4N+QoyPL+MnamzMvcE1rHNEr91F9GKZPVUcS9w7PhhH36suB9qPeYb/oLk6cuTiJ0wOK3m5h1cKjW6EVZCYMK7dxcKCBdgP9HkKr9gkAO2P8GKZGWVdIAatQa+1IDpt6qyorVwdy01xdW8Jkfk6xjEXmVQQ+HQdFr6OKhIN34dXWq0+0qr6EJSCeeVLH9+gvGTLyqM65PQ44ihzlTXxQKjKbAvshXgir7Lil9w4L2bvMycmjQcqXaMCO6BlY28i+FOLzbfI1vEqxAhotocAAA==")
-	if err != nil {
-		t.Fatalf("decode WebP fixture: %v", err)
-	}
+	webp := decodeWebPFixture(t)
 	info, err := inspectImage(bytes.NewReader(webp))
 	if err != nil {
 		t.Fatalf("inspectImage(WebP) error = %v", err)
@@ -133,6 +135,51 @@ func TestInspectImageAcceptsWebP(t *testing.T) {
 	if info.mimeType != "image/webp" || info.width <= 0 || info.height <= 0 {
 		t.Fatalf("WebP info = %#v", info)
 	}
+}
+
+func addPNGEXIF(t *testing.T, source []byte) []byte {
+	t.Helper()
+	if len(source) < 33 {
+		t.Fatal("PNG fixture is too short")
+	}
+	data := []byte("test metadata")
+	chunk := make([]byte, 12+len(data))
+	binary.BigEndian.PutUint32(chunk[:4], uint32(len(data)))
+	copy(chunk[4:8], "eXIf")
+	copy(chunk[8:], data)
+	binary.BigEndian.PutUint32(chunk[8+len(data):], crc32.ChecksumIEEE(chunk[4:8+len(data)]))
+	result := make([]byte, 0, len(source)+len(chunk))
+	result = append(result, source[:33]...)
+	result = append(result, chunk...)
+	return append(result, source[33:]...)
+}
+
+func addWebPEXIF(t *testing.T, source []byte) []byte {
+	t.Helper()
+	if len(source) < 12 || string(source[:4]) != "RIFF" || string(source[8:12]) != "WEBP" {
+		t.Fatal("WebP fixture has an invalid RIFF header")
+	}
+	data := []byte("test metadata")
+	chunk := make([]byte, 8+len(data))
+	copy(chunk[:4], "EXIF")
+	binary.LittleEndian.PutUint32(chunk[4:8], uint32(len(data)))
+	copy(chunk[8:], data)
+	if len(data)%2 == 1 {
+		chunk = append(chunk, 0)
+	}
+	result := append(append([]byte(nil), source...), chunk...)
+	binary.LittleEndian.PutUint32(result[4:8], uint32(len(result)-8))
+	return result
+}
+
+func decodeWebPFixture(t *testing.T) []byte {
+	t.Helper()
+	// 固定的无元数据 WebP 夹具避免测试依赖外部文件或额外编码器。
+	webp, err := base64.StdEncoding.DecodeString("UklGRrIBAABXRUJQVlA4TKUBAAAvSsAYAA8w//M///MfeJAkbXvaSG7m8Q3GfYSBJekwQztm/IcZlgwnmWImn2BK7aFmBtnVir6q//8VOkFE/xm4baTIu8c48ArEo6+B3zFKYln3pqClSCKX0begFTAXFOLXHSyF8cCNcZEG4OywuA4KVVfJCiArU7GAgJI8+lJP/OKMT/fBAjevg1cYB7YVkFuWga2lyPi5I0HFy5YTpWIHg0RZpkniRVW9odHAKOwosWuOGdxIyn2OvaCDvhg/we6TwadPBPbqBV58MsLmMJ8yZnOWk8SRz4N+QoyPL+MnamzMvcE1rHNEr91F9GKZPVUcS9w7PhhH36suB9qPeYb/oLk6cuTiJ0wOK3m5h1cKjW6EVZCYMK7dxcKCBdgP9HkKr9gkAO2P8GKZGWVdIAatQa+1IDpt6qyorVwdy01xdW8Jkfk6xjEXmVQQ+HQdFr6OKhIN34dXWq0+0qr6EJSCeeVLH9+gvGTLyqM65PQ44ihzlTXxQKjKbAvshXgir7Lil9w4L2bvMycmjQcqXaMCO6BlY28i+FOLzbfI1vEqxAhotocAAA==")
+	if err != nil {
+		t.Fatalf("decode WebP fixture: %v", err)
+	}
+	return webp
 }
 
 func encodePNG(t *testing.T, width, height int) []byte {
