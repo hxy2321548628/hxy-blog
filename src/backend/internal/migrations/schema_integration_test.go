@@ -32,6 +32,7 @@ func TestInitialSchemaEnforcesContentAndSessionRules(t *testing.T) {
 	assertTableStorage(t, transaction, "posts")
 	assertTableStorage(t, transaction, "admins")
 	assertTableStorage(t, transaction, "refresh_tokens")
+	assertTableStorage(t, transaction, "media_assets")
 
 	result, err := transaction.Exec(`
 		INSERT INTO admins (username, password_hash, created_at, updated_at)
@@ -69,6 +70,30 @@ func TestInitialSchemaEnforcesContentAndSessionRules(t *testing.T) {
 	assertInsertFails(t, transaction, 3819, `
 		INSERT INTO posts (slug, title, content_markdown, status, published_at, created_at, updated_at)
 		VALUES ('missing-published-at', '缺少发布时间', '', 'published', NULL, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))`)
+
+	_, err = transaction.Exec(`
+		INSERT INTO media_assets (
+			object_key, mime_type, size_bytes, width, height, checksum_sha256, status, created_at
+		) VALUES ('media/2026/10/valid.png', 'image/png', 1024, 800, 600,
+			UNHEX(REPEAT('88', 32)), 'ready', UTC_TIMESTAMP(6))`)
+	if err != nil {
+		t.Fatalf("insert media asset: %v", err)
+	}
+	assertInsertFails(t, transaction, 1062, `
+		INSERT INTO media_assets (
+			object_key, mime_type, size_bytes, width, height, checksum_sha256, status, created_at
+		) VALUES ('media/2026/10/valid.png', 'image/png', 1024, 800, 600,
+			UNHEX(REPEAT('99', 32)), 'ready', UTC_TIMESTAMP(6))`)
+	assertInsertFails(t, transaction, 3819, `
+		INSERT INTO media_assets (
+			object_key, mime_type, size_bytes, width, height, checksum_sha256, status, created_at
+		) VALUES ('media/2026/10/oversized.png', 'image/png', 10485761, 800, 600,
+			UNHEX(REPEAT('aa', 32)), 'ready', UTC_TIMESTAMP(6))`)
+	assertInsertFails(t, transaction, 3819, `
+		INSERT INTO media_assets (
+			object_key, mime_type, size_bytes, width, height, checksum_sha256, status, created_at
+		) VALUES ('media/2026/10/too-many-pixels.png', 'image/png', 1024, 5000, 5000,
+			UNHEX(REPEAT('bb', 32)), 'ready', UTC_TIMESTAMP(6))`)
 
 	expiresAt := now.Add(7 * 24 * time.Hour)
 	sessionExpiresAt := now.Add(30 * 24 * time.Hour)
