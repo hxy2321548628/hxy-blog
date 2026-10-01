@@ -35,6 +35,30 @@ export interface PostDetailResponse {
   publishedAt: string
 }
 
+export interface AdminPostSummary {
+  id: number
+  slug: string
+  title: string
+  status: 'draft' | 'published'
+  publishedAt: string | null
+  updatedAt: string
+}
+
+export interface AdminPostDetail extends AdminPostSummary {
+  contentMarkdown: string
+  createdAt: string
+}
+
+export interface DraftInput {
+  slug: string
+  title: string
+  contentMarkdown: string
+}
+
+interface AdminPostListResponse {
+  items: AdminPostSummary[]
+}
+
 interface ListPostsParams {
   page: number
   pageSize: number
@@ -81,6 +105,7 @@ const axiosBaseQuery: BaseQueryFn<RequestArgs, unknown, ApiError> = async (
 export const postApi = createApi({
   reducerPath: 'postApi',
   baseQuery: axiosBaseQuery,
+  tagTypes: ['AdminPosts', 'PublishedPosts'],
   endpoints: (builder) => ({
     listPosts: builder.query<PostListResponse, ListPostsParams>({
       query: ({ page, pageSize }) => ({
@@ -88,14 +113,58 @@ export const postApi = createApi({
         method: 'GET',
         params: { page, pageSize },
       }),
+      providesTags: ['PublishedPosts'],
     }),
     getPost: builder.query<PostDetailResponse, string>({
       query: (slug) => ({
         url: `/posts/${encodeURIComponent(slug)}`,
         method: 'GET',
       }),
+      providesTags: ['PublishedPosts'],
+    }),
+    listAdminPosts: builder.query<AdminPostListResponse, void>({
+      query: () => ({ url: '/admin/posts', method: 'GET' }),
+      providesTags: ['AdminPosts'],
+    }),
+    getAdminPost: builder.query<AdminPostDetail, number>({
+      query: (id) => ({ url: `/admin/posts/${id}`, method: 'GET' }),
+      providesTags: (_result, _error, id) => [{ type: 'AdminPosts', id }],
+    }),
+    createDraft: builder.mutation<AdminPostDetail, DraftInput>({
+      query: (draft) => ({ url: '/admin/posts', method: 'POST', data: draft }),
+      invalidatesTags: ['AdminPosts'],
+    }),
+    updateDraft: builder.mutation<
+      AdminPostDetail,
+      { id: number; draft: DraftInput }
+    >({
+      query: ({ id, draft }) => ({
+        url: `/admin/posts/${id}`,
+        method: 'PUT',
+        data: draft,
+      }),
+      invalidatesTags: (_result, _error, { id }) => [
+        'AdminPosts',
+        { type: 'AdminPosts', id },
+      ],
+    }),
+    publishPost: builder.mutation<AdminPostDetail, number>({
+      query: (id) => ({ url: `/admin/posts/${id}/publish`, method: 'POST' }),
+      invalidatesTags: (_result, _error, id) => [
+        'AdminPosts',
+        { type: 'AdminPosts', id },
+        'PublishedPosts',
+      ],
     }),
   }),
 })
 
-export const { useGetPostQuery, useListPostsQuery } = postApi
+export const {
+  useCreateDraftMutation,
+  useGetAdminPostQuery,
+  useGetPostQuery,
+  useListAdminPostsQuery,
+  useListPostsQuery,
+  usePublishPostMutation,
+  useUpdateDraftMutation,
+} = postApi

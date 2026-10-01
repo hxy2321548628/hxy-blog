@@ -1,6 +1,4 @@
-import ReactMarkdown from 'react-markdown'
-import rehypeSanitize from 'rehype-sanitize'
-import remarkGfm from 'remark-gfm'
+import MarkdownContent from '../../components/MarkdownContent'
 import type { PostDetailResponse } from './postApi'
 
 interface PostDetailProps {
@@ -25,23 +23,7 @@ function PostDetail({ post }: PostDetailProps) {
         </time>
       </header>
       <div className="article-content">
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeSanitize]}
-          skipHtml
-          components={{
-            a: ({ href, children }) => {
-              const external = href?.startsWith('http://') || href?.startsWith('https://')
-              return (
-                <a href={href} rel={external ? 'noreferrer noopener' : undefined}>
-                  {children}
-                </a>
-              )
-            },
-          }}
-        >
-          {post.contentMarkdown}
-        </ReactMarkdown>
+        <MarkdownContent>{post.contentMarkdown}</MarkdownContent>
       </div>
     </article>
   )

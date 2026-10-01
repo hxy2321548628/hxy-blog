@@ -1,11 +1,15 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
+import AdminGuard from './features/auth/AdminGuard'
 import SessionBootstrap from './features/auth/SessionBootstrap'
 import PostListPage from './features/posts/PostListPage'
 
 const PostDetailPage = lazy(() => import('./features/posts/PostDetailPage'))
 const LoginPage = lazy(() => import('./features/auth/LoginPage'))
 const AdminPage = lazy(() => import('./features/auth/AdminPage'))
+const AdminEditorPage = lazy(
+  () => import('./features/posts/AdminEditorPage'),
+)
 
 function PageLoading() {
   return (
@@ -39,14 +43,24 @@ function App() {
             </Suspense>
           }
         />
-        <Route
-          path="/admin"
-          element={
-            <Suspense fallback={<PageLoading />}>
-              <AdminPage />
-            </Suspense>
-          }
-        />
+        <Route element={<AdminGuard />}>
+          <Route
+            path="/admin"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <AdminPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/admin/posts/:id"
+            element={
+              <Suspense fallback={<PageLoading />}>
+                <AdminEditorPage />
+              </Suspense>
+            }
+          />
+        </Route>
         <Route path="*" element={<PostListPage />} />
       </Routes>
     </>
