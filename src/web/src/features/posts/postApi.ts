@@ -1,17 +1,18 @@
 import { createApi, type BaseQueryFn } from '@reduxjs/toolkit/query/react'
-import axios, { type AxiosRequestConfig } from 'axios'
+import type { AxiosRequestConfig } from 'axios'
+import { apiErrorFrom, httpClient, type ApiError } from '../../app/httpClient'
+import { refreshSession } from '../auth/authClient'
+import {
+  sessionCleared,
+  sessionReceived,
+  type AuthState,
+} from '../auth/authSlice'
 
 interface RequestArgs {
   url: string
   method?: AxiosRequestConfig['method']
   data?: unknown
   params?: Record<string, number | string>
-}
-
-interface ApiError {
-  status: number
-  code: string
-  message: string
 }
 
 export interface PostSummary {
@@ -39,46 +40,41 @@ interface ListPostsParams {
   pageSize: number
 }
 
-const client = axios.create({
-  baseURL: '/api',
-  timeout: 10_000,
-})
-
 const axiosBaseQuery: BaseQueryFn<RequestArgs, unknown, ApiError> = async (
   request,
+  api,
 ) => {
-  try {
-    const response = await client.request({
+  const send = async (accessToken: string | null) => {
+    return httpClient.request({
       url: request.url,
       method: request.method,
       data: request.data,
       params: request.params,
+      headers: accessToken
+        ? { Authorization: `Bearer ${accessToken}` }
+        : undefined,
     })
+  }
+
+  const state = api.getState() as { auth: AuthState }
+  const accessToken = state.auth.accessToken
+  try {
+    const response = await send(accessToken)
     return { data: response.data }
   } catch (error: unknown) {
-    // 前端只根据稳定错误码交互；非预期响应统一收敛为网络错误。
-    if (axios.isAxiosError(error)) {
-      const payload: unknown = error.response?.data
-      if (
-        typeof payload === 'object' &&
-        payload !== null &&
-        'code' in payload &&
-        'message' in payload &&
-        typeof payload.code === 'string' &&
-        typeof payload.message === 'string'
-      ) {
-        return {
-          error: {
-            status: error.response?.status ?? 0,
-            code: payload.code,
-            message: payload.message,
-          },
-        }
+    const apiError = apiErrorFrom(error)
+    if (apiError.status === 401 && accessToken) {
+      try {
+        const session = await refreshSession()
+        api.dispatch(sessionReceived(session))
+        const response = await send(session.accessToken)
+        return { data: response.data }
+      } catch {
+        api.dispatch(sessionCleared())
       }
     }
-    return {
-      error: { status: 0, code: 'NETWORK_ERROR', message: '无法连接服务器' },
-    }
+    // 前端只根据稳定错误码交互；非预期响应统一收敛为网络错误。
+    return { error: apiError }
   }
 }
 
