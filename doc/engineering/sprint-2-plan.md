@@ -11,7 +11,7 @@
 - 删除为物理删除，管理端必须在提交前二次确认并明示不可撤销。
 - 已发布文章可修改标题、正文、分类和标签，但保持 slug 与首次发布时间不变。
 - 前台使用 `/?category=<分类 slug>` 筛选已发布文章。
-- Markdown 围栏代码块根据 `go`、`python` 等语言标识进行语法高亮。
+- Markdown 围栏代码块根据 `go`、`python` 等语言标识进行语法高亮，并显示从 1 开始的行号。
 - Mermaid 使用 `mermaid` 代码块，数学公式使用 `$...$` 和 `$$...$$`。
 - 大纲收集 Markdown 二、三级标题；桌面端显示在文章侧边，窄屏仍保留可点击导航。
 
@@ -40,7 +40,7 @@
 
 ### 故事 3：技术文章阅读
 
-- Given Markdown 包含 `go`、`python` 等语言围栏，Then 代码按语言语法高亮并保留横向滚动。
+- Given Markdown 包含 `go`、`python` 等语言围栏，Then 代码按语言语法高亮、逐行显示连续行号并保留横向滚动。
 - Given Markdown 包含合法 Mermaid，Then 浏览器展示 SVG 图；Given 语法错误，Then 显示可理解的失败状态而不影响其余文章。
 - Given Markdown 包含行内或块级公式，Then 使用 KaTeX 渲染且窄屏不撑破页面。
 - Given 文章包含二、三级标题，Then 大纲生成唯一锚点，点击可跳转到对应标题。
