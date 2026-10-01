@@ -148,31 +148,17 @@ jobs:
       - name: 验证容器健康检查、API 代理和 SPA 回退
         run: |
           set -eu
-          # 独立网络模拟 Compose 服务发现，但不依赖开发数据库继续运行。
-          docker network create hxy-blog-ci
-          # 与 Compose 中的服务发现名称保持一致，Nginx 通过 api:8080 转发请求。
-          docker run --detach --name hxy-blog-api-ci --network hxy-blog-ci --network-alias api hxy-blog-api:local
-          docker run --detach --name hxy-blog-web-ci --network hxy-blog-ci --publish 127.0.0.1:18080:8080 hxy-blog-web:local
-
-          # 最多等待 30 秒；超时打印两个容器日志，便于直接从 CI 定位故障。
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:18080/healthz > /dev/null; then
-              break
-            fi
-            if [ "$attempt" -eq 30 ]; then
-              docker logs hxy-blog-api-ci
-              docker logs hxy-blog-web-ci
-              exit 1
-            fi
-            sleep 1
-          done
+          # Sprint 1 后 API 依赖 MySQL 与迁移；复用 Compose 才能覆盖真实服务发现和启动顺序。
+          docker compose --env-file .env.example -f deploy/compose.yaml up -d mysql --wait
+          docker compose --env-file .env.example -f deploy/compose.yaml \
+            run --rm --no-deps --entrypoint /app/migrate api up
+          docker compose --env-file .env.example -f deploy/compose.yaml \
+            up -d api web --wait --wait-timeout 60
 
           # 第一条请求验证 Nginx → Go API 代理，第二条验证 React SPA 未知路由回退。
-          curl --fail --silent http://127.0.0.1:18080/api/health | grep --fixed-strings '"status":"ok"'
-          curl --fail --silent http://127.0.0.1:18080/not-a-real-page | grep --fixed-strings '<div id="root"></div>'
+          curl --fail --silent http://127.0.0.1:8080/api/health | grep --fixed-strings '"status":"ok"'
+          curl --fail --silent http://127.0.0.1:8080/not-a-real-page | grep --fixed-strings '<div id="root"></div>'
       - name: 清理冒烟测试容器
-        # always() 保证失败路径也执行；不存在时忽略错误以保留原始失败原因。
+        # always() 保证失败路径也执行，并删除隔离卷以免 Runner 保留测试数据。
         if: always()
-        run: |
-          docker rm --force hxy-blog-web-ci hxy-blog-api-ci 2>/dev/null || true
-          docker network rm hxy-blog-ci 2>/dev/null || true
+        run: docker compose --env-file .env.example -f deploy/compose.yaml down --volumes
