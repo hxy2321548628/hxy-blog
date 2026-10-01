@@ -446,6 +446,132 @@ h1 {
   line-height: 1.75;
 }
 
+.auth-shell,
+.admin-shell {
+  width: min(720px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 48px 0 112px;
+}
+
+.auth-panel {
+  max-width: 480px;
+  padding-top: 16px;
+}
+
+.auth-panel h1,
+.admin-header h1 {
+  font-size: clamp(34px, 5vw, 46px);
+}
+
+.auth-panel__intro {
+  margin: 18px 0 32px;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.auth-form {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-form label {
+  margin-top: 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 620;
+}
+
+.auth-form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  color: var(--text-primary);
+  background: transparent;
+  font: inherit;
+}
+
+.auth-form input:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.auth-form button,
+.button-secondary {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 9px;
+  font: inherit;
+  font-weight: 620;
+  cursor: pointer;
+}
+
+.auth-form button {
+  margin-top: 18px;
+  border: 1px solid var(--accent);
+  color: var(--canvas);
+  background: var(--accent);
+}
+
+.auth-form button:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}
+
+.auth-form button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.auth-form__error {
+  margin: 6px 0 0;
+  color: var(--danger);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.admin-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.button-secondary {
+  border: 1px solid var(--border-strong);
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.button-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent-hover);
+  background: var(--surface-muted);
+}
+
+.admin-welcome {
+  padding-top: 40px;
+}
+
+.admin-welcome h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+}
+
+.admin-welcome p {
+  margin: 14px 0 0;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
 @media (max-width: 1199px) {
   .site-header__inner,
   .page-shell {
@@ -469,6 +595,12 @@ h1 {
   }
 
   .article-shell {
+    width: calc(100% - 36px);
+    padding: 36px 0 80px;
+  }
+
+  .auth-shell,
+  .admin-shell {
     width: calc(100% - 36px);
     padding: 36px 0 80px;
   }
@@ -499,6 +631,11 @@ h1 {
   .profile {
     padding-top: 32px;
     border-top: 1px solid var(--border-subtle);
+  }
+
+  .admin-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 
