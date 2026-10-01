@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 
 # .PHONY 表示这些名称是“动作”而不是文件；即使目录中出现同名文件也会执行。
-.PHONY: help setup fmt fmt-check vet test test-go test-web check check-web check-deploy container-config container-production-config container-build container-up container-down dev-admin dev-backend dev-migrate dev-web dev-db
+.PHONY: help setup fmt fmt-check vet test test-go test-web test-media-cos check check-web check-deploy container-config container-production-config container-build container-up container-down dev-admin dev-backend dev-migrate dev-web dev-db
 
 # 集中声明路径和 Compose 命令，后续目标只组合这些变量。
 WEB_DIR := src/web
@@ -35,6 +35,7 @@ help:
 		'  make vet                          运行 Go 静态检查' \
 		'  make test-go                      运行 Go 测试' \
 		'  make test-web                     运行 React 组件测试' \
+		'  make test-media-cos               对隔离 COS 桶执行媒体往返测试' \
 		'  make test                         运行全部测试' \
 		'  make check-web                    检查并构建 React 前端' \
 		'  make check-deploy                 检查部署脚本、文件名和 CAM JSON' \
@@ -71,6 +72,10 @@ test-go:
 test-web:
 	npm --prefix $(WEB_DIR) test
 
+# 必须显式提供 MEDIA_TEST_* 隔离桶变量；该目标不会读取生产 runtime.env。
+test-media-cos:
+	go -C src/backend test -tags=cosintegration ./internal/media -run '^TestCOSStorageRoundTrip$$'
+
 # 统一 test 入口同时覆盖前后端，CI 与本地不会漏掉任一侧。
 test: test-go test-web
 
@@ -90,12 +95,13 @@ container-production-config:
 	docker compose --env-file .env.example -f deploy/compose.production.yaml config --quiet
 
 # Shell 的 -n 只做语法解析；后两条命令验证新旧两种备份文件名；
-# json.tool 确认腾讯云 CAM 策略仍是合法 JSON。
+# json.tool 确认数据库备份和博客媒体两份腾讯云 CAM 策略仍是合法 JSON。
 check-deploy:
 	bash -n deploy/scripts/deploy.sh deploy/scripts/ssh-entry.sh deploy/scripts/backup-db.sh deploy/scripts/restore-drill.sh deploy/scripts/install-coscli.sh deploy/scripts/configure-coscli.sh deploy/scripts/sync-backup-cos.sh deploy/scripts/fetch-backup-cos.sh deploy/scripts/backup-current-db.sh
 	bash -c '[[ "20260930T032152Z-sha-8aa51a66049e.sql.gz" =~ ^[0-9]{8}T[0-9]{6}([0-9]{9})?Z-sha-[0-9a-f]{12}\.sql\.gz$$ ]]'
 	bash -c '[[ "20260930T032152643485203Z-sha-8aa51a66049e.sql.gz" =~ ^[0-9]{8}T[0-9]{6}([0-9]{9})?Z-sha-[0-9a-f]{12}\.sql\.gz$$ ]]'
 	python3 -m json.tool deploy/cam/cos-backup-policy.json >/dev/null
+	python3 -m json.tool deploy/cam/cos-media-policy.json >/dev/null
 
 # 构建与生产一致的 API/Web 本地镜像，CI 的容器冒烟测试依赖这些标签。
 container-build:

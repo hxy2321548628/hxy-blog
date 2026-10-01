@@ -56,6 +56,7 @@ func TestNewCOSStorageRequiresHTTPSOrigin(t *testing.T) {
 		"http://bucket.example.com",
 		"https://bucket.example.com/path",
 		"https://bucket.example.com?version=1",
+		"https://bucket.example.com?",
 		"not-a-url",
 	} {
 		if _, err := NewCOSStorage(bucketURL, "secret-id", "secret-key"); err == nil {
