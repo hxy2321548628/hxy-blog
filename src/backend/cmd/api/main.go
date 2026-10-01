@@ -12,11 +12,12 @@ import (
 	"time"
 
 	"hxy-blog/backend/internal/auth"
+	dbconfig "hxy-blog/backend/internal/database"
 	"hxy-blog/backend/internal/post"
 )
 
 func main() {
-	gormDatabase, sqlDatabase, err := openApplicationDatabase(os.Getenv)
+	gormDatabase, sqlDatabase, err := dbconfig.OpenApplication(os.Getenv)
 	if err != nil {
 		slog.Error("database initialization failed", "error", err)
 		os.Exit(1)

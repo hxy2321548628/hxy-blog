@@ -95,6 +95,38 @@ func TestRepositoryRefreshRotationAndReplayRevocation(t *testing.T) {
 	}
 }
 
+func TestRepositoryCreateSingleAdmin(t *testing.T) {
+	database := openAuthIntegrationDatabase(t)
+	transaction := database.Begin()
+	if transaction.Error != nil {
+		t.Fatalf("begin transaction: %v", transaction.Error)
+	}
+	t.Cleanup(func() { transaction.Rollback() })
+	deleteAllAuthTestTokens(t, transaction)
+	if err := transaction.Exec("DELETE FROM admins").Error; err != nil {
+		t.Fatalf("isolate administrators: %v", err)
+	}
+
+	repository := NewRepository(transaction)
+	now := time.Now().UTC()
+	if err := repository.CreateAdmin(
+		context.Background(),
+		"admin",
+		"$argon2id$integration-test-hash",
+		now,
+	); err != nil {
+		t.Fatalf("CreateAdmin() error = %v", err)
+	}
+	if err := repository.CreateAdmin(
+		context.Background(),
+		"second-admin",
+		"$argon2id$integration-test-hash",
+		now,
+	); !errors.Is(err, ErrAdminAlreadyExists) {
+		t.Fatalf("second CreateAdmin() error = %v, want ErrAdminAlreadyExists", err)
+	}
+}
+
 func deleteAuthTestFamily(t *testing.T, database *gorm.DB, familyID []byte) {
 	t.Helper()
 	for {
@@ -106,6 +138,23 @@ func deleteAuthTestFamily(t *testing.T, database *gorm.DB, familyID []byte) {
 		if result.Error != nil {
 			t.Errorf("clean refresh token family: %v", result.Error)
 			return
+		}
+		if result.RowsAffected == 0 {
+			return
+		}
+	}
+}
+
+func deleteAllAuthTestTokens(t *testing.T, database *gorm.DB) {
+	t.Helper()
+	for {
+		result := database.Exec(`
+			DELETE token
+			FROM refresh_tokens AS token
+			LEFT JOIN refresh_tokens AS child ON child.parent_id = token.id
+			WHERE child.id IS NULL`)
+		if result.Error != nil {
+			t.Fatalf("isolate refresh tokens: %v", result.Error)
 		}
 		if result.RowsAffected == 0 {
 			return

@@ -24,6 +24,7 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidSession     = errors.New("invalid refresh session")
 	ErrRefreshReplay      = errors.New("refresh token replay detected")
+	ErrAdminAlreadyExists = errors.New("administrator already exists")
 )
 
 type Admin struct {
