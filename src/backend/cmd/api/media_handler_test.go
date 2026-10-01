@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -68,6 +69,10 @@ func TestUploadMediaReturnsCreatedAsset(t *testing.T) {
 }
 
 func TestUploadMediaMapsValidationError(t *testing.T) {
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
 	service := &mediaServiceStub{err: media.ErrEXIFForbidden}
 	request := multipartRequest(t, []byte("file"))
 	response := httptest.NewRecorder()
@@ -76,6 +81,9 @@ func TestUploadMediaMapsValidationError(t *testing.T) {
 
 	if response.Code != http.StatusUnprocessableEntity || !bytes.Contains(response.Body.Bytes(), []byte(`"code":"MEDIA_EXIF_FORBIDDEN"`)) {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if !bytes.Contains(logs.Bytes(), []byte(`"result":"validation_failed"`)) || !bytes.Contains(logs.Bytes(), []byte(`"error_code":"MEDIA_EXIF_FORBIDDEN"`)) {
+		t.Fatalf("structured log = %s", logs.String())
 	}
 }
 
