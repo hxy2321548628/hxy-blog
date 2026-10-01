@@ -144,7 +144,7 @@ func adminPostID(ctx *gin.Context) (uint64, bool) {
 func respondAdminPostError(ctx *gin.Context, err error, logMessage string) {
 	switch {
 	case errors.Is(err, post.ErrInvalidInput):
-		respondError(ctx, http.StatusBadRequest, "INVALID_POST", "slug、标题或正文不符合要求")
+		respondError(ctx, http.StatusBadRequest, "INVALID_POST", "slug、标题、分类或标签不符合要求")
 	case errors.Is(err, post.ErrSlugConflict):
 		respondError(ctx, http.StatusConflict, "POST_SLUG_CONFLICT", "该 slug 已被使用")
 	case errors.Is(err, post.ErrNotDraft):

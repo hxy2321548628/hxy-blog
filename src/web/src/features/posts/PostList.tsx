@@ -26,10 +26,20 @@ function PostList({ items }: PostListProps) {
             to={`/posts/${encodeURIComponent(item.slug)}`}
           >
             <article>
-              <time className="post-meta" dateTime={item.publishedAt}>
-                {dateFormatter.format(new Date(item.publishedAt))}
-              </time>
+              <div className="post-list__meta">
+                <time className="post-meta" dateTime={item.publishedAt}>
+                  {dateFormatter.format(new Date(item.publishedAt))}
+                </time>
+                <span className="post-category">{item.category.name}</span>
+              </div>
               <h2>{item.title}</h2>
+              {item.tags.length > 0 && (
+                <ul className="tag-list" aria-label="文章标签">
+                  {item.tags.map((tag) => (
+                    <li key={tag}>{tag}</li>
+                  ))}
+                </ul>
+              )}
             </article>
           </Link>
         </li>

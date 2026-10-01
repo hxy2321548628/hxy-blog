@@ -33,6 +33,9 @@ func TestInitialSchemaEnforcesContentAndSessionRules(t *testing.T) {
 	assertTableStorage(t, transaction, "admins")
 	assertTableStorage(t, transaction, "refresh_tokens")
 	assertTableStorage(t, transaction, "media_assets")
+	assertTableStorage(t, transaction, "categories")
+	assertTableStorage(t, transaction, "tags")
+	assertTableStorage(t, transaction, "post_tags")
 
 	result, err := transaction.Exec(`
 		INSERT INTO admins (username, password_hash, created_at, updated_at)
@@ -53,8 +56,8 @@ func TestInitialSchemaEnforcesContentAndSessionRules(t *testing.T) {
 
 	now := time.Now().UTC()
 	_, err = transaction.Exec(`
-		INSERT INTO posts (slug, title, content_markdown, status, published_at, created_at, updated_at)
-		VALUES (?, ?, ?, 'draft', NULL, ?, ?)`,
+		INSERT INTO posts (slug, title, content_markdown, category_id, status, published_at, created_at, updated_at)
+		VALUES (?, ?, ?, (SELECT id FROM categories WHERE slug = 'uncategorized'), 'draft', NULL, ?, ?)`,
 		"first-post", "第一篇文章", "# Hello", now, now,
 	)
 	if err != nil {
@@ -62,14 +65,14 @@ func TestInitialSchemaEnforcesContentAndSessionRules(t *testing.T) {
 	}
 
 	assertInsertFails(t, transaction, 1062, `
-		INSERT INTO posts (slug, title, content_markdown, status, published_at, created_at, updated_at)
-		VALUES ('first-post', '重复 slug', '', 'draft', NULL, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))`)
+		INSERT INTO posts (slug, title, content_markdown, category_id, status, published_at, created_at, updated_at)
+		VALUES ('first-post', '重复 slug', '', (SELECT id FROM categories WHERE slug = 'uncategorized'), 'draft', NULL, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))`)
 	assertInsertFails(t, transaction, 3819, `
-		INSERT INTO posts (slug, title, content_markdown, status, published_at, created_at, updated_at)
-		VALUES ('invalid-status', '无效状态', '', 'deleted', NULL, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))`)
+		INSERT INTO posts (slug, title, content_markdown, category_id, status, published_at, created_at, updated_at)
+		VALUES ('invalid-status', '无效状态', '', (SELECT id FROM categories WHERE slug = 'uncategorized'), 'deleted', NULL, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))`)
 	assertInsertFails(t, transaction, 3819, `
-		INSERT INTO posts (slug, title, content_markdown, status, published_at, created_at, updated_at)
-		VALUES ('missing-published-at', '缺少发布时间', '', 'published', NULL, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))`)
+		INSERT INTO posts (slug, title, content_markdown, category_id, status, published_at, created_at, updated_at)
+		VALUES ('missing-published-at', '缺少发布时间', '', (SELECT id FROM categories WHERE slug = 'uncategorized'), 'published', NULL, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))`)
 
 	_, err = transaction.Exec(`
 		INSERT INTO media_assets (

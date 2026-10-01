@@ -19,6 +19,17 @@ export interface PostSummary {
   slug: string
   title: string
   publishedAt: string
+  category: Category
+  tags: string[]
+}
+
+export interface Category {
+  slug: string
+  name: string
+}
+
+export interface CategorySummary extends Category {
+  postCount: number
 }
 
 export interface PostListResponse {
@@ -33,6 +44,8 @@ export interface PostDetailResponse {
   title: string
   contentMarkdown: string
   publishedAt: string
+  category: Category
+  tags: string[]
 }
 
 export interface AdminPostSummary {
@@ -42,6 +55,8 @@ export interface AdminPostSummary {
   status: 'draft' | 'published'
   publishedAt: string | null
   updatedAt: string
+  category: Category
+  tags: string[]
 }
 
 export interface AdminPostDetail extends AdminPostSummary {
@@ -53,6 +68,8 @@ export interface DraftInput {
   slug: string
   title: string
   contentMarkdown: string
+  category: Category
+  tags: string[]
 }
 
 interface AdminPostListResponse {
@@ -62,6 +79,11 @@ interface AdminPostListResponse {
 interface ListPostsParams {
   page: number
   pageSize: number
+  category?: string
+}
+
+interface CategoryListResponse {
+  items: CategorySummary[]
 }
 
 const axiosBaseQuery: BaseQueryFn<RequestArgs, unknown, ApiError> = async (
@@ -108,11 +130,11 @@ export const postApi = createApi({
   tagTypes: ['AdminPosts', 'PublishedPosts'],
   endpoints: (builder) => ({
     listPosts: builder.query<PostListResponse, ListPostsParams>({
-      query: ({ page, pageSize }) => ({
-        url: '/posts',
-        method: 'GET',
-        params: { page, pageSize },
-      }),
+      query: ({ page, pageSize, category }) => {
+        const params: Record<string, number | string> = { page, pageSize }
+        if (category) params.category = category
+        return { url: '/posts', method: 'GET', params }
+      },
       providesTags: ['PublishedPosts'],
     }),
     getPost: builder.query<PostDetailResponse, string>({
@@ -120,6 +142,10 @@ export const postApi = createApi({
         url: `/posts/${encodeURIComponent(slug)}`,
         method: 'GET',
       }),
+      providesTags: ['PublishedPosts'],
+    }),
+    listCategories: builder.query<CategoryListResponse, void>({
+      query: () => ({ url: '/categories', method: 'GET' }),
       providesTags: ['PublishedPosts'],
     }),
     listAdminPosts: builder.query<AdminPostListResponse, void>({
@@ -168,6 +194,7 @@ export const {
   useDeletePostMutation,
   useGetAdminPostQuery,
   useGetPostQuery,
+  useListCategoriesQuery,
   useListAdminPostsQuery,
   useListPostsQuery,
   usePublishPostMutation,

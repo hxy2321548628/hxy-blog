@@ -34,6 +34,13 @@ function EditorForm({ initial }: EditorFormProps) {
   const [deletePost, deleteState] = useDeletePostMutation()
   const [slug, setSlug] = useState(initial?.slug ?? '')
   const [title, setTitle] = useState(initial?.title ?? '')
+  const [categoryName, setCategoryName] = useState(
+    initial?.category.name ?? '',
+  )
+  const [categorySlug, setCategorySlug] = useState(
+    initial?.category.slug ?? '',
+  )
+  const [tags, setTags] = useState(initial?.tags.join(', ') ?? '')
   const [contentMarkdown, setContentMarkdown] = useState(
     initial?.contentMarkdown ?? '',
   )
@@ -74,12 +81,17 @@ function EditorForm({ initial }: EditorFormProps) {
     slug: slug.trim(),
     title: title.trim(),
     contentMarkdown,
+    category: { slug: categorySlug.trim(), name: categoryName.trim() },
+    tags: tags
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean),
   })
 
   const save = async (): Promise<AdminPostDetail> => {
     const input = draft()
-    if (!input.slug || !input.title) {
-      throw new Error('请填写 slug 和标题。')
+    if (!input.slug || !input.title || !input.category.slug || !input.category.name) {
+      throw new Error('请填写 slug、标题和分类。')
     }
     if (isNew) {
       const created = await createDraft(input).unwrap()
@@ -174,6 +186,37 @@ function EditorForm({ initial }: EditorFormProps) {
           onChange={(event) => setSlug(event.target.value)}
         />
         <p className="field-help">仅使用小写字母、数字和单个连字符。</p>
+
+        <label htmlFor="post-category-name">分类名称</label>
+        <input
+          id="post-category-name"
+          maxLength={80}
+          required
+          value={categoryName}
+          onChange={(event) => setCategoryName(event.target.value)}
+        />
+
+        <label htmlFor="post-category-slug">分类 Slug</label>
+        <input
+          id="post-category-slug"
+          maxLength={100}
+          pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+          placeholder="engineering"
+          required
+          value={categorySlug}
+          onChange={(event) => setCategorySlug(event.target.value)}
+        />
+        <p className="field-help">相同分类 Slug 会自动复用已有分类。</p>
+
+        <label htmlFor="post-tags">标签</label>
+        <input
+          id="post-tags"
+          maxLength={400}
+          placeholder="Go, React, 工程实践"
+          value={tags}
+          onChange={(event) => setTags(event.target.value)}
+        />
+        <p className="field-help">使用英文逗号分隔，最多 10 个。</p>
 
         <label htmlFor="post-content">Markdown 正文</label>
         <textarea
