@@ -40,7 +40,7 @@ func loadMediaConfig(getenv func(string) string) (mediaConfig, error) {
 		return mediaConfig{}, errors.New("MEDIA_COS_BUCKET_URL, MEDIA_PUBLIC_BASE_URL, MEDIA_COS_SECRET_ID, and MEDIA_COS_SECRET_KEY must be configured together")
 	}
 	publicURL, err := url.Parse(config.publicBase)
-	if err != nil || publicURL.Scheme != "https" || publicURL.Host == "" || publicURL.Path != "" || publicURL.User != nil || publicURL.RawQuery != "" || publicURL.Fragment != "" {
+	if err != nil || publicURL.Scheme != "https" || publicURL.Host == "" || publicURL.Path != "" || publicURL.User != nil || publicURL.RawQuery != "" || publicURL.ForceQuery || publicURL.Fragment != "" {
 		return mediaConfig{}, errors.New("MEDIA_PUBLIC_BASE_URL must be an HTTPS origin without a path")
 	}
 	config.enabled = true

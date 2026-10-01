@@ -17,7 +17,7 @@ type COSStorage struct {
 
 func NewCOSStorage(bucketURL, secretID, secretKey string) (*COSStorage, error) {
 	bucket, err := url.Parse(bucketURL)
-	if err != nil || bucket.Scheme != "https" || bucket.Host == "" || bucket.Path != "" || bucket.User != nil || bucket.RawQuery != "" || bucket.Fragment != "" {
+	if err != nil || bucket.Scheme != "https" || bucket.Host == "" || bucket.Path != "" || bucket.User != nil || bucket.RawQuery != "" || bucket.ForceQuery || bucket.Fragment != "" {
 		return nil, errors.New("COS bucket URL must be an HTTPS origin without a path")
 	}
 	if secretID == "" || secretKey == "" {

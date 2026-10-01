@@ -1,0 +1,17 @@
+{
+  "version": "2.0",
+  "statement": [
+    {
+      "effect": "allow",
+      "action": [
+        "name/cos:PutObject",
+        "name/cos:HeadObject",
+        "name/cos:GetObject",
+        "name/cos:DeleteObject"
+      ],
+      "resource": [
+        "qcs::cos:ap-nanjing:uid/1497610660:hxy-blog-media-1497610660/media/*"
+      ]
+    }
+  ]
+}

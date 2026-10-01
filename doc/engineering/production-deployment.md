@@ -20,6 +20,7 @@ GitHub Actions 只能通过专用 SSH 密钥调用固定部署入口，不能获
 | root 恢复演练入口 | `/usr/local/sbin/hxy-blog-db-restore-drill` |
 | 即时备份目录 | `/var/backups/hxy-blog/mysql`，root:root `0700` |
 | COSCLI 配置 | `/etc/hxy-blog/cos-backup.yaml`，root:root `0600` |
+| 博客媒体凭据 | `/etc/hxy-blog/runtime.env` 中的 `MEDIA_*`，root:root `0600` |
 | 生产端口 | 仅 `127.0.0.1:8080`，备案完成前不开放 80/443 |
 
 部署公钥必须使用 `restrict` 和强制命令：
@@ -117,6 +118,46 @@ sudo /usr/local/sbin/hxy-blog-db-restore-drill \
 ```
 
 生产数据恢复仍属于人工故障处理，不由上述脚本自动覆盖。
+
+## 博客媒体 COS
+
+媒体存储与数据库备份必须使用不同的桶、CAM 身份和密钥。正式媒体资源按以下清单准备：
+
+1. 在 `ap-nanjing` 创建标准存储桶 `hxy-blog-media-1497610660`，公开读取、私有写入，关闭版本控制。
+2. `media/` 正式对象不设置自动过期；生命周期规则在 1 天后终止未完成的分片上传，并在 7 天后删除 `tmp/` 对象。
+3. 用 [`deploy/cam/cos-media-policy.json`](../../deploy/cam/cos-media-policy.json) 创建 `HxyBlogMediaPolicy`，只关联到专用编程访问子用户 `hxy-blog-media`。
+4. 在完成 ICP 备案和 TLS 配置后，将 `media.hxy2333.site` 绑定到媒体桶；应用正文只使用该稳定域名，不保存 COS 默认域名。
+5. 将以下四项写入服务器 `/etc/hxy-blog/runtime.env`，不得写入 GitHub、聊天、Shell 历史或命令行参数：
+
+```dotenv
+MEDIA_COS_BUCKET_URL=https://hxy-blog-media-1497610660.cos.ap-nanjing.myqcloud.com
+MEDIA_PUBLIC_BASE_URL=https://media.hxy2333.site
+MEDIA_COS_SECRET_ID=<媒体专用 CAM SecretId>
+MEDIA_COS_SECRET_KEY=<媒体专用 CAM SecretKey>
+```
+
+### 隔离桶集成测试
+
+自动化测试不得使用正式媒体桶。先创建独立测试桶和测试身份，把四个 `MEDIA_TEST_*` 变量写入临时的受限权限环境文件，再在加载该文件的终端运行：
+
+```dotenv
+MEDIA_TEST_COS_BUCKET_URL=https://<隔离测试桶>.cos.ap-nanjing.myqcloud.com
+MEDIA_TEST_PUBLIC_BASE_URL=https://<隔离测试桶>.cos.ap-nanjing.myqcloud.com
+MEDIA_TEST_COS_SECRET_ID=<测试身份 SecretId>
+MEDIA_TEST_COS_SECRET_KEY=<测试身份 SecretKey>
+```
+
+```bash
+make test-media-cos
+```
+
+测试会在 `media/integration/` 下生成不可预测对象键，经 HTTPS 回读并核对 SHA-256，最后删除测试对象。测试缺少任一变量、回读不是 HTTPS 200、字节变化或清理失败时都会失败。
+
+应用部署后还需在管理端上传一张无 EXIF 的小图，确认返回 URL 使用 `https://media.hxy2333.site/`、文章预览可读，并在日志中看到：
+
+- `media object upload completed`：COS 请求对象键、字节数和耗时。
+- `media upload request completed`：结果分类、错误码、状态码、媒体 ID、字节数和总耗时。
+- 任意 `media compensation deletion failed`：必须立即人工检查无元数据孤立对象。
 
 ## 备案期限制
 
