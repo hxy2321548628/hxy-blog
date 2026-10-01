@@ -25,6 +25,8 @@
 
 访客文章列表与详情遵循 `React 页面 → RTK Query → Axios → Gin Handler → Post Service → GORM Repository → MySQL` 的单一路径。Handler 只处理协议参数和响应转换；Repository 负责“仅已发布”的公开边界，并分别提供按发布时间倒序的分页列表和按稳定 slug 查询详情。详情页的 Markdown 在浏览器端按需加载，经过 GFM 扩展与 HTML 白名单清洗后渲染。
 
+管理员登录从 `cmd/admin` 的一次性建号开始，密码只保存 Argon2id 哈希。浏览器登录后将 10 分钟 Access Token 仅保存在 Redux 内存中，7 天 Refresh Token 则由服务端写入 HttpOnly、SameSite=Strict Cookie。页面重载和 Access Token 过期时共用同一个刷新协调器；并发请求只轮换一次 Refresh Token，重放检测会在服务端撤销整个令牌家族。`/admin` 在前端提供登录状态引导，真正的数据写入权限仍必须由后端 Bearer Token 校验。
+
 ## CI/CD 链
 
 ```text
