@@ -18,8 +18,9 @@ type adminPostService interface {
 	ListAdmin(ctx context.Context) ([]post.AdminSummary, error)
 	GetAdmin(ctx context.Context, id uint64) (post.AdminDetail, error)
 	CreateDraft(ctx context.Context, input post.DraftInput) (post.AdminDetail, error)
-	UpdateDraft(ctx context.Context, id uint64, input post.DraftInput) (post.AdminDetail, error)
+	Update(ctx context.Context, id uint64, input post.DraftInput) (post.AdminDetail, error)
 	Publish(ctx context.Context, id uint64) (post.AdminDetail, error)
+	Delete(ctx context.Context, id uint64) error
 }
 
 func registerAdminPostRoutes(router *gin.Engine, posts adminPostService, tokens accessTokenVerifier) {
@@ -28,7 +29,8 @@ func registerAdminPostRoutes(router *gin.Engine, posts adminPostService, tokens 
 	admin.GET("/posts", listAdminPostsHandler(posts))
 	admin.GET("/posts/:id", getAdminPostHandler(posts))
 	admin.POST("/posts", createDraftHandler(posts))
-	admin.PUT("/posts/:id", updateDraftHandler(posts))
+	admin.PUT("/posts/:id", updatePostHandler(posts))
+	admin.DELETE("/posts/:id", deletePostHandler(posts))
 	admin.POST("/posts/:id/publish", publishDraftHandler(posts))
 }
 
@@ -73,7 +75,7 @@ func createDraftHandler(posts adminPostService) gin.HandlerFunc {
 	}
 }
 
-func updateDraftHandler(posts adminPostService) gin.HandlerFunc {
+func updatePostHandler(posts adminPostService) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		id, ok := adminPostID(ctx)
 		if !ok {
@@ -83,12 +85,26 @@ func updateDraftHandler(posts adminPostService) gin.HandlerFunc {
 		if !ok {
 			return
 		}
-		detail, err := posts.UpdateDraft(ctx.Request.Context(), id, input)
+		detail, err := posts.Update(ctx.Request.Context(), id, input)
 		if err != nil {
-			respondAdminPostError(ctx, err, "update draft post failed")
+			respondAdminPostError(ctx, err, "update post failed")
 			return
 		}
 		ctx.JSON(http.StatusOK, detail)
+	}
+}
+
+func deletePostHandler(posts adminPostService) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		id, ok := adminPostID(ctx)
+		if !ok {
+			return
+		}
+		if err := posts.Delete(ctx.Request.Context(), id); err != nil {
+			respondAdminPostError(ctx, err, "delete post failed")
+			return
+		}
+		ctx.Status(http.StatusNoContent)
 	}
 }
 
@@ -132,7 +148,7 @@ func respondAdminPostError(ctx *gin.Context, err error, logMessage string) {
 	case errors.Is(err, post.ErrSlugConflict):
 		respondError(ctx, http.StatusConflict, "POST_SLUG_CONFLICT", "该 slug 已被使用")
 	case errors.Is(err, post.ErrNotDraft):
-		respondError(ctx, http.StatusConflict, "POST_NOT_DRAFT", "文章已发布，不能再次修改或发布")
+		respondError(ctx, http.StatusConflict, "POST_NOT_DRAFT", "文章已发布，不能再次发布")
 	case errors.Is(err, post.ErrNotFound):
 		respondError(ctx, http.StatusNotFound, "POST_NOT_FOUND", "文章不存在")
 	default:

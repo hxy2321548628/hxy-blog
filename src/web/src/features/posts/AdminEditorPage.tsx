@@ -7,9 +7,10 @@ import MediaUploadPanel from '../media/MediaUploadPanel'
 import { insertMarkdownImage } from '../media/markdownImage'
 import {
   useCreateDraftMutation,
+  useDeletePostMutation,
   useGetAdminPostQuery,
   usePublishPostMutation,
-  useUpdateDraftMutation,
+  useUpdatePostMutation,
   type AdminPostDetail,
   type DraftInput,
 } from './postApi'
@@ -28,8 +29,9 @@ interface EditorFormProps {
 function EditorForm({ initial }: EditorFormProps) {
   const navigate = useNavigate()
   const [createDraft, createState] = useCreateDraftMutation()
-  const [updateDraft, updateState] = useUpdateDraftMutation()
+  const [updatePost, updateState] = useUpdatePostMutation()
   const [publishPost, publishState] = usePublishPostMutation()
+  const [deletePost, deleteState] = useDeletePostMutation()
   const [slug, setSlug] = useState(initial?.slug ?? '')
   const [title, setTitle] = useState(initial?.title ?? '')
   const [contentMarkdown, setContentMarkdown] = useState(
@@ -84,7 +86,7 @@ function EditorForm({ initial }: EditorFormProps) {
       navigate(`/admin/posts/${created.id}`, { replace: true })
       return created
     }
-    return updateDraft({ id: initial.id, draft: input }).unwrap()
+    return updatePost({ id: initial.id, draft: input }).unwrap()
   }
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -93,7 +95,7 @@ function EditorForm({ initial }: EditorFormProps) {
     setMessage(null)
     try {
       await save()
-      setMessage('草稿已保存。')
+      setMessage(published ? '已发布文章已更新。' : '草稿已保存。')
     } catch (error: unknown) {
       setFormError(
         error instanceof Error ? error.message : mutationMessage(error),
@@ -115,8 +117,28 @@ function EditorForm({ initial }: EditorFormProps) {
     }
   }
 
+  const remove = async () => {
+    if (
+      !initial ||
+      !window.confirm(`确定永久删除「${initial.title}」吗？此操作无法撤销。`)
+    ) {
+      return
+    }
+    setFormError(null)
+    setMessage(null)
+    try {
+      await deletePost(initial.id).unwrap()
+      navigate('/admin', { replace: true })
+    } catch (error: unknown) {
+      setFormError(mutationMessage(error))
+    }
+  }
+
   const pending =
-    createState.isLoading || updateState.isLoading || publishState.isLoading
+    createState.isLoading ||
+    updateState.isLoading ||
+    publishState.isLoading ||
+    deleteState.isLoading
 
   return (
     <form className="editor" onSubmit={(event) => void submit(event)}>
@@ -136,7 +158,6 @@ function EditorForm({ initial }: EditorFormProps) {
           id="post-title"
           maxLength={200}
           required
-          disabled={published}
           value={title}
           onChange={(event) => setTitle(event.target.value)}
         />
@@ -158,14 +179,13 @@ function EditorForm({ initial }: EditorFormProps) {
         <textarea
           ref={contentField}
           id="post-content"
-          disabled={published}
           value={contentMarkdown}
           onChange={(event) => {
             contentMarkdownRef.current = event.target.value
             setContentMarkdown(event.target.value)
           }}
         />
-        {!published && <MediaUploadPanel onInsertMarkdown={insertImage} />}
+        <MediaUploadPanel onInsertMarkdown={insertImage} />
 
         {formError && (
           <p className="auth-form__error" role="alert">
@@ -179,6 +199,27 @@ function EditorForm({ initial }: EditorFormProps) {
         )}
 
         <div className="editor-actions">
+          {!isNew && (
+            <button
+              className="button-danger"
+              type="button"
+              disabled={pending}
+              onClick={() => void remove()}
+            >
+              {deleteState.isLoading ? '正在删除…' : '删除文章'}
+            </button>
+          )}
+          <button
+            className="button-secondary"
+            type="submit"
+            disabled={pending}
+          >
+            {updateState.isLoading || createState.isLoading
+              ? '正在保存…'
+              : published
+                ? '保存修改'
+                : '保存草稿'}
+          </button>
           {published ? (
             <Link
               className="button-primary"
@@ -187,23 +228,14 @@ function EditorForm({ initial }: EditorFormProps) {
               查看已发布文章
             </Link>
           ) : (
-            <>
-              <button
-                className="button-secondary"
-                type="submit"
-                disabled={pending}
-              >
-                {pending ? '正在保存…' : '保存草稿'}
-              </button>
-              <button
-                className="button-primary"
-                type="button"
-                disabled={pending}
-                onClick={() => void publish()}
-              >
-                {publishState.isLoading ? '正在发布…' : '保存并发布'}
-              </button>
-            </>
+            <button
+              className="button-primary"
+              type="button"
+              disabled={pending}
+              onClick={() => void publish()}
+            >
+              {publishState.isLoading ? '正在发布…' : '保存并发布'}
+            </button>
           )}
         </div>
       </section>

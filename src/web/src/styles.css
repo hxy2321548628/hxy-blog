@@ -563,7 +563,8 @@ h1 {
 }
 
 .button-secondary,
-.button-primary {
+.button-primary,
+.button-danger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -599,8 +600,21 @@ h1 {
   background: var(--accent-hover);
 }
 
+.button-danger {
+  margin-right: auto;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  background: transparent;
+}
+
+.button-danger:hover:not(:disabled) {
+  color: var(--canvas);
+  background: var(--danger);
+}
+
 .button-primary:disabled,
-.button-secondary:disabled {
+.button-secondary:disabled,
+.button-danger:disabled {
   cursor: wait;
   opacity: 0.6;
 }

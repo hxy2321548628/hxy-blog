@@ -34,8 +34,12 @@ func (stub postListStub) GetPublishedBySlug(_ context.Context, _ string) (post.D
 type postAdminStub struct {
 	postListStub
 	created     post.AdminDetail
+	updated     post.AdminDetail
 	published   post.AdminDetail
 	createCalls int
+	updateCalls int
+	deleteCalls int
+	deleteErr   error
 }
 
 func (stub *postAdminStub) ListAdmin(_ context.Context) ([]post.AdminSummary, error) {
@@ -51,12 +55,18 @@ func (stub *postAdminStub) CreateDraft(_ context.Context, _ post.DraftInput) (po
 	return stub.created, nil
 }
 
-func (stub *postAdminStub) UpdateDraft(_ context.Context, _ uint64, _ post.DraftInput) (post.AdminDetail, error) {
-	return post.AdminDetail{}, nil
+func (stub *postAdminStub) Update(_ context.Context, _ uint64, _ post.DraftInput) (post.AdminDetail, error) {
+	stub.updateCalls++
+	return stub.updated, nil
 }
 
 func (stub *postAdminStub) Publish(_ context.Context, _ uint64) (post.AdminDetail, error) {
 	return stub.published, nil
+}
+
+func (stub *postAdminStub) Delete(_ context.Context, _ uint64) error {
+	stub.deleteCalls++
+	return stub.deleteErr
 }
 
 func TestHealth(t *testing.T) {
@@ -244,6 +254,70 @@ func TestPublishDraftWithAccessToken(t *testing.T) {
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+}
+
+func TestUpdatePublishedPostWithAccessToken(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPut, "/api/admin/posts/7", strings.NewReader(`{"slug":"stable-slug","title":"修改后的标题","contentMarkdown":"# 新正文"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer access-token")
+	response := httptest.NewRecorder()
+	posts := &postAdminStub{updated: post.AdminDetail{
+		ID: 7, Slug: "stable-slug", Title: "修改后的标题", ContentMarkdown: "# 新正文",
+		Status: post.StatusPublished,
+	}}
+
+	newHandler(posts, testAuthHTTP(accessTokenVerifierStub{claims: auth.AccessClaims{AdminID: 1, Username: "admin"}})).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if posts.updateCalls != 1 {
+		t.Fatalf("Update() calls = %d, want 1", posts.updateCalls)
+	}
+}
+
+func TestDeletePostWithAccessToken(t *testing.T) {
+	request := httptest.NewRequest(http.MethodDelete, "/api/admin/posts/7", nil)
+	request.Header.Set("Authorization", "Bearer access-token")
+	response := httptest.NewRecorder()
+	posts := &postAdminStub{}
+
+	newHandler(posts, testAuthHTTP(accessTokenVerifierStub{claims: auth.AccessClaims{AdminID: 1, Username: "admin"}})).ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status code = %d, want %d; body = %s", response.Code, http.StatusNoContent, response.Body.String())
+	}
+	if posts.deleteCalls != 1 {
+		t.Fatalf("Delete() calls = %d, want 1", posts.deleteCalls)
+	}
+}
+
+func TestDeletePostRequiresAccessToken(t *testing.T) {
+	request := httptest.NewRequest(http.MethodDelete, "/api/admin/posts/7", nil)
+	response := httptest.NewRecorder()
+	posts := &postAdminStub{}
+
+	newHandler(posts, testAuthHTTP(accessTokenVerifierStub{err: errors.New("missing token")})).ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+	if posts.deleteCalls != 0 {
+		t.Fatalf("Delete() calls = %d, want 0", posts.deleteCalls)
+	}
+}
+
+func TestDeletePostReturnsNotFound(t *testing.T) {
+	request := httptest.NewRequest(http.MethodDelete, "/api/admin/posts/99", nil)
+	request.Header.Set("Authorization", "Bearer access-token")
+	response := httptest.NewRecorder()
+	posts := &postAdminStub{deleteErr: post.ErrNotFound}
+
+	newHandler(posts, testAuthHTTP(accessTokenVerifierStub{claims: auth.AccessClaims{AdminID: 1, Username: "admin"}})).ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status code = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
 	}
 }
 
