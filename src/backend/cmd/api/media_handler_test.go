@@ -68,22 +68,56 @@ func TestUploadMediaReturnsCreatedAsset(t *testing.T) {
 	}
 }
 
-func TestUploadMediaMapsValidationError(t *testing.T) {
-	var logs bytes.Buffer
-	previousLogger := slog.Default()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
-	t.Cleanup(func() { slog.SetDefault(previousLogger) })
-	service := &mediaServiceStub{err: media.ErrEXIFForbidden}
-	request := multipartRequest(t, []byte("file"))
+func TestUploadMediaMapsServiceErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		statusCode int
+		code       string
+		result     string
+	}{
+		{name: "too large", err: media.ErrTooLarge, statusCode: http.StatusRequestEntityTooLarge, code: "MEDIA_TOO_LARGE", result: "too_large"},
+		{name: "unsupported", err: media.ErrUnsupportedFormat, statusCode: http.StatusUnsupportedMediaType, code: "MEDIA_UNSUPPORTED", result: "validation_failed"},
+		{name: "dimensions", err: media.ErrInvalidDimensions, statusCode: http.StatusUnprocessableEntity, code: "MEDIA_DIMENSIONS_INVALID", result: "validation_failed"},
+		{name: "EXIF", err: media.ErrEXIFForbidden, statusCode: http.StatusUnprocessableEntity, code: "MEDIA_EXIF_FORBIDDEN", result: "validation_failed"},
+		{name: "corrupt", err: media.ErrInvalidImage, statusCode: http.StatusUnprocessableEntity, code: "MEDIA_INVALID", result: "validation_failed"},
+		{name: "busy", err: media.ErrBusy, statusCode: http.StatusTooManyRequests, code: "MEDIA_UPLOAD_BUSY", result: "busy"},
+		{name: "storage", err: media.ErrStorageUnavailable, statusCode: http.StatusServiceUnavailable, code: "MEDIA_STORAGE_UNAVAILABLE", result: "storage_failed"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			previousLogger := slog.Default()
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+			t.Cleanup(func() { slog.SetDefault(previousLogger) })
+			service := &mediaServiceStub{err: test.err}
+			request := multipartRequest(t, []byte("file"))
+			response := httptest.NewRecorder()
+
+			uploadMediaHandler(service)(testGinContext(response, request))
+
+			if response.Code != test.statusCode || !bytes.Contains(response.Body.Bytes(), []byte(`"code":"`+test.code+`"`)) {
+				t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+			}
+			if !bytes.Contains(logs.Bytes(), []byte(`"result":"`+test.result+`"`)) || !bytes.Contains(logs.Bytes(), []byte(`"error_code":"`+test.code+`"`)) {
+				t.Fatalf("structured log = %s", logs.String())
+			}
+		})
+	}
+}
+
+func TestUploadMediaRejectsOversizedMultipartBody(t *testing.T) {
+	service := &mediaServiceStub{}
+	request := multipartRequest(t, bytes.Repeat([]byte{'x'}, int(media.MaxFileSize+1)))
 	response := httptest.NewRecorder()
 
 	uploadMediaHandler(service)(testGinContext(response, request))
 
-	if response.Code != http.StatusUnprocessableEntity || !bytes.Contains(response.Body.Bytes(), []byte(`"code":"MEDIA_EXIF_FORBIDDEN"`)) {
+	if response.Code != http.StatusRequestEntityTooLarge || !bytes.Contains(response.Body.Bytes(), []byte(`"code":"MEDIA_TOO_LARGE"`)) {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
-	if !bytes.Contains(logs.Bytes(), []byte(`"result":"validation_failed"`)) || !bytes.Contains(logs.Bytes(), []byte(`"error_code":"MEDIA_EXIF_FORBIDDEN"`)) {
-		t.Fatalf("structured log = %s", logs.String())
+	if service.calls != 0 {
+		t.Fatalf("Upload() calls = %d, want 0", service.calls)
 	}
 }
 
