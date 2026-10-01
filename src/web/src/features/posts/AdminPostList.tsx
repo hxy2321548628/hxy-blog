@@ -31,6 +31,7 @@ function AdminPostList({ items }: AdminPostListProps) {
               </span>
               <h2>{item.title}</h2>
               <p>/{item.slug}</p>
+              <p>{item.category.name}</p>
             </div>
             <time dateTime={item.updatedAt}>
               {dateFormatter.format(new Date(item.updatedAt))}

@@ -95,6 +95,7 @@ func TestAdministratorDraftLifecycle(t *testing.T) {
 	service := NewService(NewRepository(transaction))
 	draft, err := service.CreateDraft(context.Background(), DraftInput{
 		Slug: "first-draft", Title: "第一篇草稿", ContentMarkdown: "",
+		Category: Category{Slug: "engineering", Name: "工程"}, Tags: []string{"Go", "MySQL"},
 	})
 	if err != nil {
 		t.Fatalf("CreateDraft() error = %v", err)
@@ -104,7 +105,7 @@ func TestAdministratorDraftLifecycle(t *testing.T) {
 	}
 
 	if _, err := service.CreateDraft(context.Background(), DraftInput{
-		Slug: "first-draft", Title: "重复 slug",
+		Slug: "first-draft", Title: "重复 slug", Category: Category{Slug: "engineering", Name: "工程"},
 	}); !errors.Is(err, ErrSlugConflict) {
 		t.Fatalf("duplicate CreateDraft() error = %v, want ErrSlugConflict", err)
 	}
@@ -114,6 +115,7 @@ func TestAdministratorDraftLifecycle(t *testing.T) {
 
 	updated, err := service.Update(context.Background(), draft.ID, DraftInput{
 		Slug: "first-post", Title: "第一篇文章", ContentMarkdown: "# 正文",
+		Category: Category{Slug: "engineering", Name: "工程"}, Tags: []string{"Go"},
 	})
 	if err != nil {
 		t.Fatalf("Update() draft error = %v", err)
@@ -136,6 +138,7 @@ func TestAdministratorDraftLifecycle(t *testing.T) {
 	originalPublishedAt := *published.PublishedAt
 	published, err = service.Update(context.Background(), draft.ID, DraftInput{
 		Slug: "changed", Title: "发布后的新标题", ContentMarkdown: "# 发布后的新正文",
+		Category: Category{Slug: "notes", Name: "笔记"}, Tags: []string{"Go", "React"},
 	})
 	if err != nil {
 		t.Fatalf("Update() published error = %v", err)
@@ -143,8 +146,25 @@ func TestAdministratorDraftLifecycle(t *testing.T) {
 	if published.Slug != "first-post" || published.Title != "发布后的新标题" || published.ContentMarkdown != "# 发布后的新正文" {
 		t.Fatalf("published update = %#v", published)
 	}
+	if published.Category.Slug != "notes" || len(published.Tags) != 2 {
+		t.Fatalf("published taxonomy = %#v, %#v", published.Category, published.Tags)
+	}
 	if published.PublishedAt == nil || !published.PublishedAt.Equal(originalPublishedAt) {
 		t.Fatalf("publishedAt = %v, want unchanged %v", published.PublishedAt, originalPublishedAt)
+	}
+	public, err = service.GetPublishedBySlug(context.Background(), "first-post")
+	if err != nil || public.Category.Slug != "notes" || len(public.Tags) != 2 {
+		t.Fatalf("updated GetPublishedBySlug() = %#v, %v", public, err)
+	}
+	filtered, err := service.ListPublished(context.Background(), Pagination{
+		Page: 1, PageSize: 10, CategorySlug: "notes",
+	})
+	if err != nil || filtered.Total != 1 || len(filtered.Items) != 1 {
+		t.Fatalf("filtered ListPublished() = %#v, %v", filtered, err)
+	}
+	categories, err := service.ListPublishedCategories(context.Background())
+	if err != nil || len(categories) != 1 || categories[0].Slug != "notes" || categories[0].PostCount != 1 {
+		t.Fatalf("ListPublishedCategories() = %#v, %v", categories, err)
 	}
 
 	items, err := service.ListAdmin(context.Background())
@@ -193,8 +213,8 @@ func insertPost(t *testing.T, database *gorm.DB, slug, title, content, status st
 	t.Helper()
 	now := time.Now().UTC()
 	if err := database.Exec(`
-		INSERT INTO posts (slug, title, content_markdown, status, published_at, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		INSERT INTO posts (slug, title, content_markdown, category_id, status, published_at, created_at, updated_at)
+		VALUES (?, ?, ?, (SELECT id FROM categories WHERE slug = 'uncategorized'), ?, ?, ?, ?)`,
 		slug, title, content, status, publishedAt, now, now,
 	).Error; err != nil {
 		t.Fatalf("insert post %s: %v", slug, err)

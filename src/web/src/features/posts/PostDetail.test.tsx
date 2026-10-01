@@ -12,6 +12,8 @@ describe('PostDetail', () => {
           contentMarkdown:
             '## 小标题\n\n- 列表项\n\n![系统架构图](https://media.hxy2333.site/media/test.png)\n\n![危险图片](javascript:alert(1))\n\n[外部链接](https://example.com)\n\n<script>alert("xss")</script>',
           publishedAt: '2026-10-01T02:03:04Z',
+          category: { slug: 'engineering', name: '工程' },
+          tags: ['Go'],
         }}
       />,
     )
@@ -21,6 +23,8 @@ describe('PostDetail', () => {
     expect(html).toContain('<li>列表项</li>')
     expect(html).toContain('dateTime="2026-10-01T02:03:04Z"')
     expect(html).toContain('rel="noreferrer noopener"')
+    expect(html).toContain('工程')
+    expect(html).toContain('Go')
     expect(html).toContain(
       '<img src="https://media.hxy2333.site/media/test.png" alt="系统架构图"',
     )

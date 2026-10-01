@@ -13,6 +13,8 @@ describe('PostList', () => {
               slug: 'hello-world',
               title: '第一篇文章',
               publishedAt: '2026-10-01T02:03:04Z',
+              category: { slug: 'engineering', name: '工程' },
+              tags: ['Go', 'React'],
             },
           ]}
         />
@@ -22,6 +24,8 @@ describe('PostList', () => {
     expect(html).toContain('第一篇文章')
     expect(html).toContain('dateTime="2026-10-01T02:03:04Z"')
     expect(html).toContain('href="/posts/hello-world"')
+    expect(html).toContain('工程')
+    expect(html).toContain('Go')
   })
 
   it('在没有已发布文章时显示空状态', () => {

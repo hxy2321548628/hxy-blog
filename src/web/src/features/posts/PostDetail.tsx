@@ -21,6 +21,16 @@ function PostDetail({ post }: PostDetailProps) {
         <time className="article__date" dateTime={post.publishedAt}>
           发布于 {dateFormatter.format(new Date(post.publishedAt))}
         </time>
+        <div className="article-taxonomy">
+          <span className="post-category">{post.category.name}</span>
+          {post.tags.length > 0 && (
+            <ul className="tag-list" aria-label="文章标签">
+              {post.tags.map((tag) => (
+                <li key={tag}>{tag}</li>
+              ))}
+            </ul>
+          )}
+        </div>
       </header>
       <div className="article-content">
         <MarkdownContent>{post.contentMarkdown}</MarkdownContent>

@@ -15,13 +15,18 @@ import (
 )
 
 type postListStub struct {
-	result    post.ListResult
-	err       error
-	detail    post.Detail
-	detailErr error
+	result         post.ListResult
+	err            error
+	detail         post.Detail
+	detailErr      error
+	categories     []post.CategorySummary
+	paginationSeen *post.Pagination
 }
 
 func (stub postListStub) ListPublished(_ context.Context, pagination post.Pagination) (post.ListResult, error) {
+	if stub.paginationSeen != nil {
+		*stub.paginationSeen = pagination
+	}
 	stub.result.Page = pagination.Page
 	stub.result.PageSize = pagination.PageSize
 	return stub.result, stub.err
@@ -29,6 +34,10 @@ func (stub postListStub) ListPublished(_ context.Context, pagination post.Pagina
 
 func (stub postListStub) GetPublishedBySlug(_ context.Context, _ string) (post.Detail, error) {
 	return stub.detail, stub.detailErr
+}
+
+func (stub postListStub) ListPublishedCategories(_ context.Context) ([]post.CategorySummary, error) {
+	return stub.categories, stub.err
 }
 
 type postAdminStub struct {
@@ -122,6 +131,51 @@ func TestListPublishedPosts(t *testing.T) {
 	}
 	if body.Page != 2 || body.PageSize != 10 || body.Total != 11 {
 		t.Fatalf("pagination = page %d, pageSize %d, total %d", body.Page, body.PageSize, body.Total)
+	}
+}
+
+func TestListPublishedPostsFiltersByCategory(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/posts?category=go&page=1&pageSize=10", nil)
+	response := httptest.NewRecorder()
+	var pagination post.Pagination
+
+	newHandler(postListStub{paginationSeen: &pagination}, nil).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
+	}
+	if pagination.CategorySlug != "go" {
+		t.Fatalf("category slug = %q, want go", pagination.CategorySlug)
+	}
+}
+
+func TestListPublishedPostsRejectsInvalidCategory(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/posts?category=Go%20Lang", nil)
+	response := httptest.NewRecorder()
+
+	newHandler(postListStub{}, nil).ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusBadRequest)
+	}
+	if body := strings.TrimSpace(response.Body.String()); body != `{"code":"INVALID_CATEGORY","message":"分类 slug 无效"}` {
+		t.Fatalf("body = %q", body)
+	}
+}
+
+func TestListPublishedCategories(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/categories", nil)
+	response := httptest.NewRecorder()
+
+	newHandler(postListStub{categories: []post.CategorySummary{{
+		Slug: "go", Name: "Go", PostCount: 2,
+	}}}, nil).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
+	}
+	if body := strings.TrimSpace(response.Body.String()); body != `{"items":[{"slug":"go","name":"Go","postCount":2}]}` {
+		t.Fatalf("body = %q", body)
 	}
 }
 

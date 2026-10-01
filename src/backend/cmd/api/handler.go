@@ -15,6 +15,7 @@ import (
 type postService interface {
 	ListPublished(ctx context.Context, pagination post.Pagination) (post.ListResult, error)
 	GetPublishedBySlug(ctx context.Context, slug string) (post.Detail, error)
+	ListPublishedCategories(ctx context.Context) ([]post.CategorySummary, error)
 }
 
 // newHandler 负责集中注册 HTTP 路由。
@@ -35,6 +36,7 @@ func newHandler(posts postService, authentication *authHTTPDependencies) http.Ha
 	router.GET("/api/health", healthHandler)
 	router.GET("/api/posts", listPublishedPostsHandler(posts))
 	router.GET("/api/posts/:slug", getPublishedPostHandler(posts))
+	router.GET("/api/categories", listPublishedCategoriesHandler(posts))
 	if authentication != nil {
 		registerAuthRoutes(
 			router,
@@ -61,6 +63,11 @@ func healthHandler(ctx *gin.Context) {
 
 func listPublishedPostsHandler(posts postService) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		categorySlug := ctx.Query("category")
+		if categorySlug != "" && !post.ValidCategorySlug(categorySlug) {
+			respondError(ctx, http.StatusBadRequest, "INVALID_CATEGORY", "分类 slug 无效")
+			return
+		}
 		pagination, ok := parsePagination(ctx)
 		if !ok {
 			ctx.JSON(http.StatusBadRequest, gin.H{
@@ -70,6 +77,7 @@ func listPublishedPostsHandler(posts postService) gin.HandlerFunc {
 			return
 		}
 
+		pagination.CategorySlug = categorySlug
 		result, err := posts.ListPublished(ctx.Request.Context(), pagination)
 		if err != nil {
 			slog.Error("list published posts failed", "error", err)
@@ -80,6 +88,18 @@ func listPublishedPostsHandler(posts postService) gin.HandlerFunc {
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
+	}
+}
+
+func listPublishedCategoriesHandler(posts postService) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		items, err := posts.ListPublishedCategories(ctx.Request.Context())
+		if err != nil {
+			slog.Error("list published categories failed", "error", err)
+			respondError(ctx, http.StatusInternalServerError, "INTERNAL_ERROR", "服务暂时不可用")
+			return
+		}
+		ctx.JSON(http.StatusOK, gin.H{"items": items})
 	}
 }
 

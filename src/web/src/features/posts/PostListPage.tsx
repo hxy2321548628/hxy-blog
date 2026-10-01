@@ -1,7 +1,7 @@
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import SiteHeader from '../../components/SiteHeader'
 import PostList from './PostList'
-import { useListPostsQuery } from './postApi'
+import { useListCategoriesQuery, useListPostsQuery } from './postApi'
 
 const pageSize = 10
 
@@ -13,11 +13,23 @@ function pageFromSearchParams(value: string | null) {
 function PostListPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const page = pageFromSearchParams(searchParams.get('page'))
-  const { data, isLoading, isError } = useListPostsQuery({ page, pageSize })
+  const category = searchParams.get('category') ?? undefined
+  const { data, isLoading, isError } = useListPostsQuery({
+    page,
+    pageSize,
+    category,
+  })
+  const { data: categoryData } = useListCategoriesQuery()
+  const activeCategory = categoryData?.items.find(
+    (item) => item.slug === category,
+  )
 
   const changePage = (nextPage: number) => {
-    // 第一页不保留冗余查询参数，复制首页 URL 时更简洁。
-    setSearchParams(nextPage === 1 ? {} : { page: String(nextPage) })
+    // 切换分页时保留分类；第一页则不保留冗余 page 参数。
+    const next = new URLSearchParams()
+    if (category) next.set('category', category)
+    if (nextPage !== 1) next.set('page', String(nextPage))
+    setSearchParams(next)
   }
 
   return (
@@ -34,7 +46,9 @@ function PostListPage() {
             <div className="list-heading">
               <div>
                 <p className="eyebrow">WRITING</p>
-                <h1 id="latest-posts">最近写作</h1>
+                <h1 id="latest-posts">
+                  {activeCategory ? activeCategory.name : '最近写作'}
+                </h1>
               </div>
               {data && <span className="post-count">{data.total} 篇</span>}
             </div>
@@ -72,7 +86,40 @@ function PostListPage() {
             )}
           </section>
 
-          <aside className="profile" id="about" aria-label="关于博主">
+          <aside className="profile" id="about" aria-label="站点信息">
+            {categoryData && categoryData.items.length > 0 && (
+              <section className="profile__section">
+                <h2>分类</h2>
+                <nav className="category-nav" aria-label="文章分类">
+                  <Link
+                    className={!category ? 'category-nav__active' : undefined}
+                    to="/"
+                  >
+                    <span>全部</span>
+                    <span>
+                      {categoryData.items.reduce(
+                        (total, item) => total + item.postCount,
+                        0,
+                      )}
+                    </span>
+                  </Link>
+                  {categoryData.items.map((item) => (
+                    <Link
+                      key={item.slug}
+                      className={
+                        category === item.slug
+                          ? 'category-nav__active'
+                          : undefined
+                      }
+                      to={`/?category=${encodeURIComponent(item.slug)}`}
+                    >
+                      <span>{item.name}</span>
+                      <span>{item.postCount}</span>
+                    </Link>
+                  ))}
+                </nav>
+              </section>
+            )}
             <section className="profile__section">
               <h2>关于</h2>
               <p>独立开发者，关注 Go、React、AI 工程化，以及如何把复杂系统讲清楚。</p>
