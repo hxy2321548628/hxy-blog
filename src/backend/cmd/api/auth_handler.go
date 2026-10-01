@@ -159,8 +159,29 @@ func meHandler(tokens accessTokenVerifier) gin.HandlerFunc {
 	}
 }
 
+func requireAccessToken(tokens accessTokenVerifier) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		raw, ok := bearerToken(ctx.GetHeader("Authorization"))
+		if !ok {
+			respondError(ctx, http.StatusUnauthorized, "UNAUTHORIZED", "需要登录")
+			ctx.Abort()
+			return
+		}
+		if _, err := tokens.Parse(raw); err != nil {
+			respondError(ctx, http.StatusUnauthorized, "UNAUTHORIZED", "需要登录")
+			ctx.Abort()
+			return
+		}
+		ctx.Next()
+	}
+}
+
 func decodeJSONBody(ctx *gin.Context, target any) error {
-	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, authRequestBodyLimit)
+	return decodeJSONBodyWithLimit(ctx, target, authRequestBodyLimit)
+}
+
+func decodeJSONBodyWithLimit(ctx *gin.Context, target any, limit int64) error {
+	ctx.Request.Body = http.MaxBytesReader(ctx.Writer, ctx.Request.Body, limit)
 	decoder := json.NewDecoder(ctx.Request.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
@@ -259,7 +280,7 @@ func corsMiddleware(allowed map[string]struct{}) gin.HandlerFunc {
 			ctx.Header("Access-Control-Allow-Origin", origin)
 			ctx.Header("Access-Control-Allow-Credentials", "true")
 			ctx.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			ctx.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
 			ctx.Header("Vary", "Origin")
 		}
 		if ctx.Request.Method == http.MethodOptions {

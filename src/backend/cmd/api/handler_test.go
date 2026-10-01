@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"hxy-blog/backend/internal/auth"
 	"hxy-blog/backend/internal/post"
 )
 
@@ -28,6 +29,34 @@ func (stub postListStub) ListPublished(_ context.Context, pagination post.Pagina
 
 func (stub postListStub) GetPublishedBySlug(_ context.Context, _ string) (post.Detail, error) {
 	return stub.detail, stub.detailErr
+}
+
+type postAdminStub struct {
+	postListStub
+	created     post.AdminDetail
+	published   post.AdminDetail
+	createCalls int
+}
+
+func (stub *postAdminStub) ListAdmin(_ context.Context) ([]post.AdminSummary, error) {
+	return nil, nil
+}
+
+func (stub *postAdminStub) GetAdmin(_ context.Context, _ uint64) (post.AdminDetail, error) {
+	return post.AdminDetail{}, post.ErrNotFound
+}
+
+func (stub *postAdminStub) CreateDraft(_ context.Context, _ post.DraftInput) (post.AdminDetail, error) {
+	stub.createCalls++
+	return stub.created, nil
+}
+
+func (stub *postAdminStub) UpdateDraft(_ context.Context, _ uint64, _ post.DraftInput) (post.AdminDetail, error) {
+	return post.AdminDetail{}, nil
+}
+
+func (stub *postAdminStub) Publish(_ context.Context, _ uint64) (post.AdminDetail, error) {
+	return stub.published, nil
 }
 
 func TestHealth(t *testing.T) {
@@ -163,5 +192,64 @@ func TestGetPublishedPostHidesDatabaseErrors(t *testing.T) {
 	}
 	if body := strings.TrimSpace(response.Body.String()); body != `{"code":"INTERNAL_ERROR","message":"服务暂时不可用"}` {
 		t.Fatalf("body = %q", body)
+	}
+}
+
+func TestCreateDraftRequiresAccessToken(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/posts", strings.NewReader(`{"slug":"new-post","title":"新文章","contentMarkdown":"正文"}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	posts := &postAdminStub{}
+
+	newHandler(posts, testAuthHTTP(accessTokenVerifierStub{err: errors.New("missing token")})).ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status code = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+	if posts.createCalls != 0 {
+		t.Fatalf("CreateDraft() calls = %d, want 0", posts.createCalls)
+	}
+}
+
+func TestCreateDraftWithAccessToken(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/posts", strings.NewReader(`{"slug":"new-post","title":"新文章","contentMarkdown":"# 正文"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer access-token")
+	response := httptest.NewRecorder()
+	posts := &postAdminStub{created: post.AdminDetail{
+		ID: 7, Slug: "new-post", Title: "新文章", ContentMarkdown: "# 正文", Status: post.StatusDraft,
+	}}
+
+	newHandler(posts, testAuthHTTP(accessTokenVerifierStub{claims: auth.AccessClaims{AdminID: 1, Username: "admin"}})).ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status code = %d, want %d; body = %s", response.Code, http.StatusCreated, response.Body.String())
+	}
+	if posts.createCalls != 1 {
+		t.Fatalf("CreateDraft() calls = %d, want 1", posts.createCalls)
+	}
+}
+
+func TestPublishDraftWithAccessToken(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/posts/7/publish", nil)
+	request.Header.Set("Authorization", "Bearer access-token")
+	response := httptest.NewRecorder()
+	publishedAt := time.Date(2026, time.October, 1, 3, 0, 0, 0, time.UTC)
+	posts := &postAdminStub{published: post.AdminDetail{
+		ID: 7, Slug: "new-post", Title: "新文章", ContentMarkdown: "# 正文",
+		Status: post.StatusPublished, PublishedAt: &publishedAt,
+	}}
+
+	newHandler(posts, testAuthHTTP(accessTokenVerifierStub{claims: auth.AccessClaims{AdminID: 1, Username: "admin"}})).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+}
+
+func testAuthHTTP(tokens accessTokenVerifier) *authHTTPDependencies {
+	return &authHTTPDependencies{
+		tokens: tokens,
+		config: authHandlerConfig{allowedOrigins: map[string]struct{}{}},
 	}
 }
