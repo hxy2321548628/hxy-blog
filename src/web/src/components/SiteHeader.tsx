@@ -15,9 +15,6 @@ function SiteHeader() {
           >
             文章
           </Link>
-          <a className="site-nav__link" href="/#about">
-            关于
-          </a>
         </nav>
       </div>
     </header>
