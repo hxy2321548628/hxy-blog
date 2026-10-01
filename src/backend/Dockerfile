@@ -18,9 +18,10 @@ RUN GOPROXY="${GO_MODULE_PROXY}" go mod download
 
 COPY . .
 # CGO_ENABLED=0 生成不依赖系统 C 库的二进制；trimpath 去除构建机路径，
-# -s -w 删除调试符号以缩小镜像。迁移器与 API 来自同一 Commit。
+# -s -w 删除调试符号以缩小镜像。API、迁移器和管理员工具来自同一 Commit。
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/migrate ./cmd/migrate
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/admin ./cmd/admin
 
 FROM ${RUNTIME_IMAGE} AS runtime
 
@@ -37,6 +38,7 @@ LABEL org.opencontainers.image.title="hxy-blog-api" \
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder /out/api /app/api
 COPY --from=builder /out/migrate /app/migrate
+COPY --from=builder /out/admin /app/admin
 
 # Compose 可以覆盖监听地址；镜像单独运行时默认监听容器内 8080。
 ENV HTTP_ADDR=:8080

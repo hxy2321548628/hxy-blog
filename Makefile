@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 
 # .PHONY 表示这些名称是“动作”而不是文件；即使目录中出现同名文件也会执行。
-.PHONY: help setup fmt fmt-check vet test test-go test-web check check-web check-deploy container-config container-production-config container-build container-up container-down dev-backend dev-migrate dev-web dev-db
+.PHONY: help setup fmt fmt-check vet test test-go test-web check check-web check-deploy container-config container-production-config container-build container-up container-down dev-admin dev-backend dev-migrate dev-web dev-db
 
 # 集中声明路径和 Compose 命令，后续目标只组合这些变量。
 WEB_DIR := src/web
@@ -25,6 +25,7 @@ help:
 		'  make setup                        按锁文件安装前端依赖' \
 		'  make dev-db                       启动本地 MySQL' \
 		'  make dev-migrate                  对本地 MySQL 执行 Goose up' \
+		'  make dev-admin                    一次性创建本地管理员' \
 		'  make dev-backend                  启动 Go API' \
 		'  make dev-web                      启动 React 开发服务器' \
 		'' \
@@ -119,6 +120,10 @@ dev-backend:
 
 dev-migrate:
 	bash -c 'set -a; source .env; set +a; exec go -C src/backend run ./cmd/migrate up'
+
+# 初始密码只从未提交的 .env 进入进程环境，不出现在命令行参数和 Shell 历史中。
+dev-admin:
+	bash -c 'set -a; source .env; set +a; exec go -C src/backend run ./cmd/admin create'
 
 dev-web:
 	npm --prefix $(WEB_DIR) run dev

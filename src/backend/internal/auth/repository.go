@@ -7,12 +7,35 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 type Repository struct {
 	database *gorm.DB
+}
+
+func (repository *Repository) CreateAdmin(
+	ctx context.Context,
+	username string,
+	passwordHash string,
+	now time.Time,
+) error {
+	err := repository.database.WithContext(ctx).Table("admins").Create(map[string]any{
+		"username":      username,
+		"password_hash": passwordHash,
+		"created_at":    now,
+		"updated_at":    now,
+	}).Error
+	var mysqlError *mysql.MySQLError
+	if errors.As(err, &mysqlError) && mysqlError.Number == 1062 {
+		return ErrAdminAlreadyExists
+	}
+	if err != nil {
+		return fmt.Errorf("insert administrator: %w", err)
+	}
+	return nil
 }
 
 func NewRepository(database *gorm.DB) *Repository {

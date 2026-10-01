@@ -1,4 +1,4 @@
-package main
+package database
 
 import (
 	"context"
@@ -8,15 +8,14 @@ import (
 	"os"
 	"time"
 
-	dbconfig "hxy-blog/backend/internal/database"
-
 	gormmysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-func openApplicationDatabase(getenv func(string) string) (*gorm.DB, *sql.DB, error) {
-	config, err := dbconfig.MySQLConfig(getenv)
+// OpenApplication 建立 API 和一次性管理命令共用的受限数据库连接池。
+func OpenApplication(getenv func(string) string) (*gorm.DB, *sql.DB, error) {
+	config, err := MySQLConfig(getenv)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -36,7 +35,7 @@ func openApplicationDatabase(getenv func(string) string) (*gorm.DB, *sql.DB, err
 		return nil, nil, fmt.Errorf("ping database: %w", err)
 	}
 
-	// SQL 日志不展开参数，避免未来的文章正文或凭据出现在容器日志中。
+	// SQL 日志不展开参数，避免文章正文、密码哈希或凭据出现在容器日志中。
 	gormLogger := logger.New(log.New(os.Stderr, "", log.LstdFlags), logger.Config{
 		SlowThreshold:        500 * time.Millisecond,
 		LogLevel:             logger.Warn,
