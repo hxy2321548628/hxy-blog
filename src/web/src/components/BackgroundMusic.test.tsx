@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import BackgroundMusic, {
   DEFAULT_BACKGROUND_MUSIC_VOLUME,
+  listenForFirstPageClick,
   startBackgroundMusic,
   toggleBackgroundMusic,
 } from './BackgroundMusic'
@@ -25,11 +26,12 @@ describe('BackgroundMusic', () => {
     expect(html).toContain('aria-label="播放背景音乐"')
   })
 
-  it('以 10% 音量尝试自动播放', async () => {
+  it('以 5% 音量尝试自动播放', async () => {
     const audio = createAudioStub()
 
     await expect(startBackgroundMusic(audio)).resolves.toBe(true)
-    expect(audio.volume).toBe(DEFAULT_BACKGROUND_MUSIC_VOLUME)
+    expect(DEFAULT_BACKGROUND_MUSIC_VOLUME).toBe(0.05)
+    expect(audio.volume).toBe(0.05)
     expect(audio.play).toHaveBeenCalledOnce()
   })
 
@@ -48,5 +50,29 @@ describe('BackgroundMusic', () => {
     expect(playingAudio.pause).toHaveBeenCalledOnce()
     await expect(toggleBackgroundMusic(pausedAudio)).resolves.toBe(true)
     expect(pausedAudio.play).toHaveBeenCalledOnce()
+  })
+
+  it('自动播放被拦截后只在首次页面点击时重试', () => {
+    const listeners = new Set<EventListener>()
+    const page = {
+      addEventListener: vi.fn((_type: 'click', listener: EventListener) => {
+        listeners.add(listener)
+      }),
+      removeEventListener: vi.fn((_type: 'click', listener: EventListener) => {
+        listeners.delete(listener)
+      }),
+    }
+    const retry = vi.fn()
+
+    listenForFirstPageClick(page, retry)
+    for (const listener of [...listeners]) {
+      listener(new Event('click'))
+    }
+    for (const listener of [...listeners]) {
+      listener(new Event('click'))
+    }
+
+    expect(retry).toHaveBeenCalledOnce()
+    expect(page.removeEventListener).toHaveBeenCalledOnce()
   })
 })
