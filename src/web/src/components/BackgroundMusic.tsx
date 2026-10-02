@@ -1,11 +1,41 @@
 import { useEffect, useRef, useState } from 'react'
 
-export const DEFAULT_BACKGROUND_MUSIC_VOLUME = 0.1
+export const DEFAULT_BACKGROUND_MUSIC_VOLUME = 0.05
 
 type BackgroundAudio = Pick<
   HTMLAudioElement,
   'pause' | 'paused' | 'play' | 'volume'
 >
+
+type PageClickTarget = {
+  addEventListener(type: 'click', listener: EventListener): void
+  removeEventListener(type: 'click', listener: EventListener): void
+}
+
+export function listenForFirstPageClick(
+  page: PageClickTarget,
+  onFirstClick: () => void,
+): () => void {
+  let isListening = true
+
+  const stopListening = () => {
+    if (!isListening) {
+      return
+    }
+
+    isListening = false
+    page.removeEventListener('click', handleClick)
+  }
+
+  const handleClick: EventListener = () => {
+    // 只消费首次点击，避免后续页面操作反复触发播放请求。
+    stopListening()
+    onFirstClick()
+  }
+
+  page.addEventListener('click', handleClick)
+  return stopListening
+}
 
 export async function startBackgroundMusic(
   audio: BackgroundAudio,
@@ -49,14 +79,27 @@ function BackgroundMusic() {
     }
 
     let isMounted = true
+    let stopWaitingForClick: (() => void) | undefined
     void startBackgroundMusic(audio).then((started) => {
       if (isMounted) {
         setIsPlaying(started)
+
+        if (!started) {
+          // 自动播放被拦截后，首次页面点击提供浏览器要求的用户手势。
+          stopWaitingForClick = listenForFirstPageClick(document, () => {
+            void startBackgroundMusic(audio).then((startedAfterClick) => {
+              if (isMounted) {
+                setIsPlaying(startedAfterClick)
+              }
+            })
+          })
+        }
       }
     })
 
     return () => {
       isMounted = false
+      stopWaitingForClick?.()
       // 组件只存在于前台，进入管理端时立即停止音乐。
       audio.pause()
     }
