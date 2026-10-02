@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { Route, Routes, useLocation } from 'react-router-dom'
+import BackgroundMusic from './components/BackgroundMusic'
 import AdminGuard from './features/auth/AdminGuard'
 import SessionBootstrap from './features/auth/SessionBootstrap'
 import PostListPage from './features/posts/PostListPage'
@@ -22,9 +23,13 @@ function PageLoading() {
 }
 
 function App() {
+  const { pathname } = useLocation()
+  const isPublicRoute = !pathname.startsWith('/admin')
+
   return (
     <>
       <SessionBootstrap />
+      {isPublicRoute ? <BackgroundMusic /> : null}
       <Routes>
         <Route path="/" element={<PostListPage />} />
         <Route
