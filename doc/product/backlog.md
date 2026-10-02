@@ -44,6 +44,14 @@ Sprint 目标：博主可维护文章全生命周期及分类标签，访客可�
 
 Sprint 2 已于 2026-10-02 完成验收，详细范围见 [`Sprint 2 开发计划`](../engineering/sprint-2-plan.md)，证据见 [`Sprint 2 验收记录`](../engineering/sprint-2-acceptance.md)。
 
+## Sprint 3：沉浸式阅读氛围
+
+Sprint 目标：访客浏览博客前台时可伴随固定背景音乐阅读，并能随时暂停或继续播放。
+
+1. [x] 前台页面默认尝试以 10% 音量循环播放背景音乐，并提供始终可用的暂停/继续控制。
+
+详细范围见 [`Sprint 3 开发计划`](../engineering/sprint-3-plan.md)。
+
 ## 暂不进入 MVP
 
 多用户、评论、搜索、独立媒体库、图片编辑/转换、RSS、统计仪表盘、微服务和 Kubernetes。
