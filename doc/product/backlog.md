@@ -52,6 +52,8 @@ Sprint 目标：访客浏览博客前台时可伴随固定背景音乐阅读，�
 
 详细范围见 [`Sprint 3 开发计划`](../engineering/sprint-3-plan.md)。
 
+Sprint 3 已于 2026-10-02 完成验收，证据见 [`Sprint 3 验收记录`](../engineering/sprint-3-acceptance.md)。
+
 ## 暂不进入 MVP
 
 多用户、评论、搜索、独立媒体库、图片编辑/转换、RSS、统计仪表盘、微服务和 Kubernetes。
