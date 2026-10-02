@@ -68,8 +68,8 @@ jobs:
                 --execute "SELECT MAX(version_id) FROM goose_db_version WHERE is_applied = 1;"
             '
           )"
-          # 当前最新版本应为 4；同时证明第二次 up 没有重复执行副作用。
-          test "$version" = 4
+          # 当前最新版本应为 5；同时证明第二次 up 没有重复执行副作用。
+          test "$version" = 5
 
           # 显式标记的集成测试连接真实 MySQL，验证索引、CHECK 和外键而不是仅检查 SQL 文本。
           set -a
@@ -82,7 +82,7 @@ jobs:
           docker compose --env-file .env.example -f deploy/compose.yaml \
             run --rm --no-deps --entrypoint /app/migrate api down
 
-          remaining_media_tables="$(
+          remaining_taxonomy_tables="$(
             docker compose --env-file .env.example -f deploy/compose.yaml exec -T mysql sh -ec '
               MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" exec mysql \
                 --host=127.0.0.1 \
@@ -92,12 +92,12 @@ jobs:
                 "${MYSQL_DATABASE}" \
                 --execute "SELECT COUNT(*) FROM information_schema.tables
                   WHERE table_schema = DATABASE()
-                  AND table_name = '"'"'media_assets'"'"';"
+                  AND table_name IN ('"'"'categories'"'"', '"'"'tags'"'"', '"'"'post_tags'"'"');"
             '
           )"
-          test "${remaining_media_tables}" = 0
+          test "${remaining_taxonomy_tables}" = 0
 
-          # 一次 down 只回退最新的媒体迁移；前序文章和鉴权表必须保持不变。
+          # 一次 down 只回退最新的分类标签迁移；前序文章、鉴权和媒体表必须保持不变。
           base_tables="$(
             docker compose --env-file .env.example -f deploy/compose.yaml exec -T mysql sh -ec '
               MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" exec mysql \
@@ -108,10 +108,10 @@ jobs:
                 "${MYSQL_DATABASE}" \
                 --execute "SELECT COUNT(*) FROM information_schema.tables
                   WHERE table_schema = DATABASE()
-                  AND table_name IN ('"'"'posts'"'"', '"'"'admins'"'"', '"'"'refresh_tokens'"'"');"
+                  AND table_name IN ('"'"'posts'"'"', '"'"'admins'"'"', '"'"'refresh_tokens'"'"', '"'"'media_assets'"'"');"
             '
           )"
-          test "${base_tables}" = 3
+          test "${base_tables}" = 4
 
           version="$(
             docker compose --env-file .env.example -f deploy/compose.yaml exec -T mysql sh -ec '
@@ -124,7 +124,7 @@ jobs:
                 --execute "SELECT MAX(version_id) FROM goose_db_version WHERE is_applied = 1;"
             '
           )"
-          test "$version" = 3
+          test "$version" = 4
 
           docker compose --env-file .env.example -f deploy/compose.yaml \
             run --rm --no-deps --entrypoint /app/migrate api up
@@ -140,7 +140,7 @@ jobs:
                 --execute "SELECT MAX(version_id) FROM goose_db_version WHERE is_applied = 1;"
             '
           )"
-          test "$version" = 4
+          test "$version" = 5
       - name: 清理迁移测试数据库
         # 即使前一步失败也清理卷，避免 GitHub Runner 留下测试状态。
         if: always()
