@@ -9,11 +9,19 @@ import (
 	"encoding/binary"
 	"errors"
 	"image"
+	"image/gif"
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
 
+	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/webp"
+)
+
+// 多帧 GIF 的压缩体积不能代表解码内存；以下预算保护 2C2G 单机的上传进程。
+const (
+	maxGIFFrames      = 1000
+	maxGIFFramePixels = 100_000_000
 )
 
 type imageInfo struct {
@@ -68,7 +76,18 @@ func inspectImage(file io.ReadSeeker) (imageInfo, error) {
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return imageInfo{}, ErrInvalidImage
 	}
-	if _, fullFormat, err := image.Decode(file); err != nil || fullFormat != format {
+	if format == "gif" {
+		// GIF 必须校验全部帧；先读取帧描述限制解码预算，避免小文件膨胀耗尽单机内存。
+		if err := checkGIFFrameBudget(file); err != nil {
+			return imageInfo{}, err
+		}
+		if _, err := file.Seek(0, io.SeekStart); err != nil {
+			return imageInfo{}, ErrInvalidImage
+		}
+		if _, err := gif.DecodeAll(file); err != nil {
+			return imageInfo{}, ErrInvalidImage
+		}
+	} else if _, fullFormat, err := image.Decode(file); err != nil || fullFormat != format {
 		return imageInfo{}, ErrInvalidImage
 	}
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
@@ -99,6 +118,10 @@ func detectImageFormat(file io.ReadSeeker) (string, string, string, error) {
 		return "image/png", "png", "png", nil
 	case string(header[:4]) == "RIFF" && string(header[8:12]) == "WEBP":
 		return "image/webp", "webp", "webp", nil
+	case bytes.Equal(header[:6], []byte("GIF87a")) || bytes.Equal(header[:6], []byte("GIF89a")):
+		return "image/gif", "gif", "gif", nil
+	case bytes.Equal(header[:2], []byte("BM")):
+		return "image/bmp", "bmp", "bmp", nil
 	default:
 		return "", "", "", ErrUnsupportedFormat
 	}
@@ -115,8 +138,84 @@ func containsEXIF(file io.ReadSeeker, format string) (bool, error) {
 		return chunkContainsEXIF(file, 8, binary.BigEndian, "eXIf", false)
 	case "webp":
 		return chunkContainsEXIF(file, 12, binary.LittleEndian, "EXIF", true)
+	case "bmp", "gif":
+		return false, nil
 	default:
 		return false, ErrUnsupportedFormat
+	}
+}
+
+func checkGIFFrameBudget(reader io.Reader) error {
+	header := make([]byte, 13)
+	if _, err := io.ReadFull(reader, header); err != nil {
+		return ErrInvalidImage
+	}
+	if header[10]&0x80 != 0 {
+		if _, err := io.CopyN(io.Discard, reader, int64(3<<(int(header[10]&7)+1))); err != nil {
+			return ErrInvalidImage
+		}
+	}
+	frames := 0
+	var totalPixels int64
+	var block [1]byte
+	var descriptor [9]byte
+	for {
+		if _, err := io.ReadFull(reader, block[:]); err != nil {
+			return ErrInvalidImage
+		}
+		switch block[0] {
+		case 0x2c: // 图像描述符列出每一帧的实际像素矩形。
+			if _, err := io.ReadFull(reader, descriptor[:]); err != nil {
+				return ErrInvalidImage
+			}
+			width := int64(binary.LittleEndian.Uint16(descriptor[4:6]))
+			height := int64(binary.LittleEndian.Uint16(descriptor[6:8]))
+			frames++
+			totalPixels += width * height
+			if width == 0 || height == 0 || frames > maxGIFFrames || totalPixels > maxGIFFramePixels {
+				return ErrInvalidDimensions
+			}
+			if descriptor[8]&0x80 != 0 {
+				if _, err := io.CopyN(io.Discard, reader, int64(3<<(int(descriptor[8]&7)+1))); err != nil {
+					return ErrInvalidImage
+				}
+			}
+			if _, err := io.CopyN(io.Discard, reader, 1); err != nil {
+				return ErrInvalidImage
+			}
+			if err := skipGIFSubBlocks(reader); err != nil {
+				return err
+			}
+		case 0x21: // 扩展块可能包含播放延迟或注释，长度由子块序列决定。
+			if _, err := io.CopyN(io.Discard, reader, 1); err != nil {
+				return ErrInvalidImage
+			}
+			if err := skipGIFSubBlocks(reader); err != nil {
+				return err
+			}
+		case 0x3b:
+			if frames == 0 {
+				return ErrInvalidImage
+			}
+			return nil
+		default:
+			return ErrInvalidImage
+		}
+	}
+}
+
+func skipGIFSubBlocks(reader io.Reader) error {
+	var length [1]byte
+	for {
+		if _, err := io.ReadFull(reader, length[:]); err != nil {
+			return ErrInvalidImage
+		}
+		if length[0] == 0 {
+			return nil
+		}
+		if _, err := io.CopyN(io.Discard, reader, int64(length[0])); err != nil {
+			return ErrInvalidImage
+		}
 	}
 }
 

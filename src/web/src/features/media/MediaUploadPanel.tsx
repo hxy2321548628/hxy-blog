@@ -26,18 +26,26 @@ import {
 } from './mediaSlice'
 
 const maxFileSize = 10 * 1024 * 1024
-const supportedTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+// 部分浏览器把 BMP 标为 image/x-ms-bmp；服务端仍按实际文件内容作最终校验。
+const supportedTypes = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/bmp',
+  'image/x-ms-bmp',
+  'image/gif',
+])
 
 interface MediaUploadPanelProps {
   onInsertMarkdown: (altText: string, url: string) => void
 }
 
-function validationError(file: File) {
+export function validationError(file: File) {
   if (file.size > maxFileSize) {
     return '图片超过 10 MiB，请压缩后重新选择。'
   }
   if (file.type && !supportedTypes.has(file.type)) {
-    return '仅支持 JPG、PNG 和 WebP 图片。'
+    return '仅支持 JPG、PNG、WebP、BMP 和 GIF 图片。'
   }
   return null
 }
@@ -267,7 +275,7 @@ function MediaUploadPanel({ onInsertMarkdown }: MediaUploadPanelProps) {
       <div className="media-uploader__heading">
         <div>
           <h3 id="media-upload-title">插入图片</h3>
-          <p>JPG、PNG、WebP · 单张不超过 10 MiB</p>
+          <p>JPG、PNG、WebP、BMP、GIF · 单张不超过 10 MiB</p>
         </div>
       </div>
 
@@ -281,7 +289,7 @@ function MediaUploadPanel({ onInsertMarkdown }: MediaUploadPanelProps) {
         <input
           ref={fileInput}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp,image/bmp,image/x-ms-bmp,image/gif,.bmp,.gif"
           multiple
           onChange={selectFiles}
         />

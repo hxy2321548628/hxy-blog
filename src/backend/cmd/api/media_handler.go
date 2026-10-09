@@ -113,7 +113,7 @@ func respondMediaError(ctx *gin.Context, err error) (string, string, int) {
 		respondError(ctx, http.StatusRequestEntityTooLarge, "MEDIA_TOO_LARGE", "图片不能超过 10 MiB")
 		return "too_large", "MEDIA_TOO_LARGE", http.StatusRequestEntityTooLarge
 	case errors.Is(err, media.ErrUnsupportedFormat):
-		respondError(ctx, http.StatusUnsupportedMediaType, "MEDIA_UNSUPPORTED", "仅支持 JPG、PNG 和 WebP 图片")
+		respondError(ctx, http.StatusUnsupportedMediaType, "MEDIA_UNSUPPORTED", "仅支持 JPG、PNG、WebP、BMP 和 GIF 图片")
 		return "validation_failed", "MEDIA_UNSUPPORTED", http.StatusUnsupportedMediaType
 	case errors.Is(err, media.ErrInvalidDimensions):
 		respondError(ctx, http.StatusUnprocessableEntity, "MEDIA_DIMENSIONS_INVALID", "图片尺寸或总像素超出限制")

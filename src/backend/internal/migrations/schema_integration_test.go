@@ -82,6 +82,24 @@ func TestInitialSchemaEnforcesContentAndSessionRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert media asset: %v", err)
 	}
+	for _, mediaType := range []struct{ mimeType, objectKey string }{
+		{mimeType: "image/bmp", objectKey: "media/2026/10/valid.bmp"},
+		{mimeType: "image/gif", objectKey: "media/2026/10/valid.gif"},
+	} {
+		// 扩展格式必须被数据库约束接受，避免对象已上传但元数据写入失败。
+		if _, err := transaction.Exec(`
+			INSERT INTO media_assets (
+				object_key, mime_type, size_bytes, width, height, checksum_sha256, status, created_at
+			) VALUES (?, ?, 1024, 800, 600, UNHEX(REPEAT('77', 32)), 'ready', UTC_TIMESTAMP(6))`,
+			mediaType.objectKey, mediaType.mimeType); err != nil {
+			t.Fatalf("insert %s media asset: %v", mediaType.mimeType, err)
+		}
+	}
+	assertInsertFails(t, transaction, 3819, `
+		INSERT INTO media_assets (
+			object_key, mime_type, size_bytes, width, height, checksum_sha256, status, created_at
+		) VALUES ('media/2026/10/invalid.svg', 'image/svg+xml', 1024, 800, 600,
+			UNHEX(REPEAT('66', 32)), 'ready', UTC_TIMESTAMP(6))`)
 	assertInsertFails(t, transaction, 1062, `
 		INSERT INTO media_assets (
 			object_key, mime_type, size_bytes, width, height, checksum_sha256, status, created_at

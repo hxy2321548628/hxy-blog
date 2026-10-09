@@ -46,6 +46,8 @@ flowchart LR
 
 ## 范围
 
+2026-10-10 后续范围变更：Sprint 6 在已完成的 MVP 基础上增加 BMP 和 GIF 上传，保留 GIF 原始动画；原有格式、COS 存储边界、媒体 URL 和单文件 10 MiB 限制不变。新增格式通过可回滚迁移进入媒体 MIME 白名单。下列“MVP 范围”记录初始交付时的决策，不代表 Sprint 6 后的完整格式清单。
+
 ### MVP 范围内
 
 - JPG、PNG、WebP 图片上传。
