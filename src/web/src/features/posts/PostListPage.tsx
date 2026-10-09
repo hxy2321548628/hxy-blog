@@ -1,4 +1,5 @@
 import { Link, useSearchParams } from 'react-router-dom'
+import SiteFooter from '../../components/SiteFooter'
 import SiteHeader from '../../components/SiteHeader'
 import PostList from './PostList'
 import { useListCategoriesQuery, useListPostsQuery } from './postApi'
@@ -40,17 +41,77 @@ function PostListPage() {
       <SiteHeader />
 
       <main className="page-shell" id="main-content">
+        <div className="journal-index">
+          <span>01 / JOURNAL</span>
+          <span>独立写作 · 持续更新</span>
+        </div>
+        <header className="journal-hero">
+          <div className="journal-hero__main">
+            <p className="eyebrow">
+              <span className="red-square" aria-hidden="true" />
+              HXY / NOTES ON BUILDING
+            </p>
+            <h1>
+              记录问题。<br />
+              <span>整理答案。</span>
+            </h1>
+          </div>
+          <div className="journal-hero__aside">
+            <span className="journal-hero__mark" aria-hidden="true">✳</span>
+            <p>你好，我是 hxy。这里记录技术、工程实践与长期思考。</p>
+            <span>文字，是思考的另一种结构。</span>
+          </div>
+        </header>
+
+        <div className="list-heading" id="latest-posts">
+          <div>
+            <span className="list-heading__number">01</span>
+            <h2>{activeCategory ? activeCategory.name : '全部文章'}</h2>
+          </div>
+          <span className="list-heading__note">
+            SELECTED WRITING / {new Date().getFullYear()}
+          </span>
+        </div>
         <div className="page-grid">
-          <section className="post-column" aria-labelledby="latest-posts">
-            <p className="intro">你好，我是 hxy。这里记录技术、工程实践与长期思考。</p>
-            <div className="list-heading">
-              <div>
-                <p className="eyebrow">WRITING</p>
-                <h1 id="latest-posts">
-                  {activeCategory ? activeCategory.name : '最近写作'}
-                </h1>
-              </div>
-              {data && <span className="post-count">{data.total} 篇</span>}
+          <aside className="profile" aria-label="文章分类">
+            <p className="profile__label">BROWSE BY TOPIC</p>
+            <nav className="category-nav" aria-label="文章分类">
+              <Link
+                className={!category ? 'category-nav__active' : undefined}
+                aria-current={!category ? 'page' : undefined}
+                to="/"
+              >
+                <span>全部</span>
+                <span>
+                  {categoryData?.items.reduce(
+                    (total, item) => total + item.postCount,
+                    0,
+                  ) ?? '—'}
+                </span>
+              </Link>
+              {categoryData?.items.map((item) => (
+                <Link
+                  key={item.slug}
+                  className={
+                    category === item.slug ? 'category-nav__active' : undefined
+                  }
+                  aria-current={category === item.slug ? 'page' : undefined}
+                  to={`/?category=${encodeURIComponent(item.slug)}`}
+                >
+                  <span>{item.name}</span>
+                  <span>{item.postCount}</span>
+                </Link>
+              ))}
+            </nav>
+            <p className="profile__note">
+              以分类找到主题，<br />以标题决定下一次阅读。
+            </p>
+          </aside>
+
+          <section className="post-column" aria-label="文章列表">
+            <div className="post-column__heading">
+              <span>文章 / ARTICLE</span>
+              {data && <span className="post-count">共 {data.total} 篇</span>}
             </div>
 
             {isLoading && (
@@ -63,7 +124,12 @@ function PostListPage() {
                 文章暂时无法加载，请稍后重试。
               </p>
             )}
-            {data && <PostList items={data.items} />}
+            {data && (
+              <PostList
+                items={data.items}
+                startIndex={(page - 1) * pageSize}
+              />
+            )}
 
             {data && data.total > pageSize && (
               <nav className="pagination" aria-label="文章分页">
@@ -85,52 +151,9 @@ function PostListPage() {
               </nav>
             )}
           </section>
-
-          <aside className="profile" id="about" aria-label="站点信息">
-            {categoryData && categoryData.items.length > 0 && (
-              <section className="profile__section">
-                <h2>分类</h2>
-                <nav className="category-nav" aria-label="文章分类">
-                  <Link
-                    className={!category ? 'category-nav__active' : undefined}
-                    to="/"
-                  >
-                    <span>全部</span>
-                    <span>
-                      {categoryData.items.reduce(
-                        (total, item) => total + item.postCount,
-                        0,
-                      )}
-                    </span>
-                  </Link>
-                  {categoryData.items.map((item) => (
-                    <Link
-                      key={item.slug}
-                      className={
-                        category === item.slug
-                          ? 'category-nav__active'
-                          : undefined
-                      }
-                      to={`/?category=${encodeURIComponent(item.slug)}`}
-                    >
-                      <span>{item.name}</span>
-                      <span>{item.postCount}</span>
-                    </Link>
-                  ))}
-                </nav>
-              </section>
-            )}
-            <section className="profile__section">
-              <h2>关于</h2>
-              <p>独立开发者，关注 Go、React、AI 工程化，以及如何把复杂系统讲清楚。</p>
-            </section>
-            <section className="profile__section">
-              <h2>正在做</h2>
-              <p>构建这个简单、可维护的个人博客。</p>
-            </section>
-          </aside>
         </div>
       </main>
+      <SiteFooter />
     </>
   )
 }

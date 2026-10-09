@@ -8,6 +8,7 @@ describe('PostList', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
         <PostList
+          startIndex={10}
           items={[
             {
               slug: 'hello-world',
@@ -24,6 +25,7 @@ describe('PostList', () => {
     expect(html).toContain('第一篇文章')
     expect(html).toContain('dateTime="2026-10-01T02:03:04Z"')
     expect(html).toContain('href="/posts/hello-world"')
+    expect(html).toContain('post-list__number">11</span>')
     expect(html).toContain('工程')
     expect(html).toContain('Go')
   })

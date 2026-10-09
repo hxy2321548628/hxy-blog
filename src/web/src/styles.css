@@ -149,8 +149,7 @@ a:focus-visible {
   transition: color 120ms ease, background-color 120ms ease;
 }
 
-.site-nav__link:hover,
-.site-nav__link--active {
+.site-nav__link:hover {
   color: var(--text-primary);
   background: var(--surface-muted);
 }
@@ -170,14 +169,6 @@ a:focus-visible {
 
 .post-column {
   min-width: 0;
-}
-
-.intro {
-  max-width: 640px;
-  margin: 0 0 52px;
-  color: var(--text-secondary);
-  font-size: 17px;
-  line-height: 1.85;
 }
 
 .list-heading {
@@ -211,8 +202,7 @@ h1 {
   line-height: 1.5;
 }
 
-.post-list__meta,
-.article-taxonomy {
+.post-list__meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -269,20 +259,6 @@ h1 {
   padding: 26px 0 30px;
 }
 
-.post-list h2 {
-  margin: 7px 0 0;
-  font-size: clamp(21px, 3vw, 28px);
-  font-weight: 620;
-  line-height: 1.3;
-  letter-spacing: -0.025em;
-  transition: color 120ms ease;
-}
-
-.post-list__link:hover h2,
-.post-list__link:focus-visible h2 {
-  color: var(--accent-hover);
-}
-
 .empty-state,
 .request-state {
   margin: 0;
@@ -299,30 +275,6 @@ h1 {
 
 .profile {
   padding-top: 8px;
-}
-
-.profile__section {
-  padding: 0 0 28px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.profile__section + .profile__section {
-  padding-top: 28px;
-}
-
-.profile__section h2 {
-  margin: 0;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.09em;
-}
-
-.profile__section p {
-  margin: 10px 0 0;
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.75;
 }
 
 .category-nav {
@@ -396,10 +348,6 @@ h1 {
   justify-content: space-between;
 }
 
-.article {
-  min-width: 0;
-}
-
 .back-link {
   display: inline-flex;
   align-items: center;
@@ -432,14 +380,6 @@ h1 {
   margin-top: 20px;
   color: var(--text-tertiary);
   font-size: 13px;
-}
-
-.article-taxonomy {
-  margin-top: 16px;
-}
-
-.article-taxonomy .tag-list {
-  margin: 0;
 }
 
 .article-content {
@@ -1333,11 +1273,6 @@ h1 {
     gap: 56px;
   }
 
-  .intro {
-    margin-bottom: 40px;
-    font-size: 16px;
-  }
-
   .back-link {
     margin-bottom: 28px;
   }
@@ -1404,10 +1339,6 @@ h1 {
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
-  }
-
-  .site-nav__link:not(.site-nav__link--active) {
-    display: none;
   }
 
   .page-shell {

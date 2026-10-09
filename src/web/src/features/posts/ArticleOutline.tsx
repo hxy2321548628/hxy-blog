@@ -9,17 +9,20 @@ function ArticleOutline({ items }: ArticleOutlineProps) {
 
   return (
     <aside className="article-outline">
-      <p className="article-outline__title">文章大纲</p>
+      <p className="article-outline__title">ON THIS PAGE / 文章大纲</p>
       <nav aria-label="文章大纲">
         <ol>
-          {items.map((item) => (
+          {items.map((item, index) => (
             <li
               key={item.id}
               className={
                 item.depth === 3 ? 'article-outline__item--nested' : undefined
               }
             >
-              <a href={`#${item.id}`}>{item.text}</a>
+              <a href={`#${item.id}`}>
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                {item.text}
+              </a>
             </li>
           ))}
         </ol>
