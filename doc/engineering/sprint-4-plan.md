@@ -1,7 +1,7 @@
 # Sprint 4 原型计划
 
 - 日期：2026-10-09
-- 状态：原型已完成，待用户评审
+- 状态：原型已完成并获用户确认，后续已由 Sprint 5 实施
 - Sprint 目标：用可评审原型确定博客前台的瑞士风格视觉方向，同时保持文章浏览和长文阅读的清晰度。
 
 ## 目标与范围
@@ -43,3 +43,8 @@
 - 原型图：[`桌面列表`](../design/swiss-blog-prototype/list-desktop.png)、[`手机列表`](../design/swiss-blog-prototype/list-mobile.png)、[`桌面详情`](../design/swiss-blog-prototype/article-desktop.png)、[`手机详情`](../design/swiss-blog-prototype/article-mobile.png)。
 - 已在 1440px 桌面宽度和 390px 手机宽度目视检查列表、详情、中文换行、代码块与页面底部；分类切换可筛选示例文章。
 - 示例文章与日期只用于评审视觉方案，不代表数据库中的真实内容。
+
+## 验收结论
+
+- 本 Sprint 的原型文件和四张桌面/手机截图已随提交 `3324abe` 进入 `main`；上述布局检查与交付范围已完成。
+- 用户已确认原型方向，并以此启动 Sprint 5 的真实前台实施；Sprint 4 不包含生产页面发布。
