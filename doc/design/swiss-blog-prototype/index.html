@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="hxy.blog 瑞士风格博客前台视觉原型" />
+    <title>hxy.blog · 瑞士风格博客原型</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到主要内容</a>
+    <div class="site-frame">
+      <header class="masthead">
+        <div class="masthead__inner">
+          <a class="brand" href="./index.html" aria-label="hxy.blog 首页">
+            <span class="brand__mark" aria-hidden="true">h.</span>
+            <span class="brand__name">hxy.blog</span>
+          </a>
+          <span class="masthead__note">关于技术、工程与长期思考的个人记录</span>
+          <nav class="masthead__nav" aria-label="原型页面">
+            <a href="./index.html" data-nav="list">文章列表</a>
+            <a href="?view=article" data-nav="article">阅读示例 <span aria-hidden="true">↗</span></a>
+          </nav>
+        </div>
+      </header>
+
+      <main id="main-content">
+        <section class="prototype-page" id="list-page" aria-labelledby="list-title">
+          <div class="content-wrap">
+            <div class="hero__index"><span>01 / JOURNAL</span><span>独立写作 · 持续更新</span></div>
+            <div class="hero">
+              <div class="hero__main">
+                <p class="kicker"><span class="red-square" aria-hidden="true"></span> HXY / NOTES ON BUILDING</p>
+                <h1 id="list-title">记录问题。<br /><span>整理答案。</span></h1>
+              </div>
+              <div class="hero__aside">
+                <span class="hero__asterisk" aria-hidden="true">✳</span>
+                <p>你好，我是 hxy。这里记录技术、工程实践与长期思考。</p>
+                <span class="hero__aside-foot">文字，是思考的另一种结构。</span>
+              </div>
+            </div>
+
+            <div class="section-bar" id="posts">
+              <div><span class="section-bar__number">01</span><h2>全部文章</h2></div>
+              <span class="section-bar__en">SELECTED WRITING / 2026</span>
+            </div>
+
+            <div class="listing-grid">
+              <aside class="filters" aria-label="文章分类">
+                <p class="small-label">BROWSE BY TOPIC</p>
+                <div class="filters__buttons">
+                  <button type="button" data-filter="all" aria-pressed="true">全部 <span>04</span></button>
+                  <button type="button" data-filter="engineering" aria-pressed="false">工程实践 <span>02</span></button>
+                  <button type="button" data-filter="thinking" aria-pressed="false">长期思考 <span>02</span></button>
+                </div>
+                <p class="filters__note">以分类找到主题，<br />以标题决定下一次阅读。</p>
+              </aside>
+              <div class="post-results">
+                <div class="post-results__head"><span>文章 / ARTICLE</span><span id="post-count">共 04 篇</span></div>
+                <ol class="post-list">
+                  <li data-category="engineering">
+                    <a class="post-card" href="?view=article">
+                      <span class="post-card__number">01</span>
+                      <span class="post-card__body"><span class="post-card__meta">工程实践 <span class="divider-dot">·</span> 2026.10.02</span><strong>让复杂系统保持简单</strong><span class="post-card__tags"># Go　# 架构设计　# 个人项目</span></span>
+                      <span class="post-card__arrow" aria-hidden="true">↗</span>
+                    </a>
+                  </li>
+                  <li data-category="thinking">
+                    <a class="post-card" href="?view=article">
+                      <span class="post-card__number">02</span>
+                      <span class="post-card__body"><span class="post-card__meta">长期思考 <span class="divider-dot">·</span> 2026.09.28</span><strong>写作是对想法的一次重新编译</strong><span class="post-card__tags"># 写作　# 方法</span></span>
+                      <span class="post-card__arrow" aria-hidden="true">↗</span>
+                    </a>
+                  </li>
+                  <li data-category="engineering">
+                    <a class="post-card" href="?view=article">
+                      <span class="post-card__number">03</span>
+                      <span class="post-card__body"><span class="post-card__meta">工程实践 <span class="divider-dot">·</span> 2026.09.21</span><strong>一台 2C2G 服务器上的博客</strong><span class="post-card__tags"># 部署　# MySQL</span></span>
+                      <span class="post-card__arrow" aria-hidden="true">↗</span>
+                    </a>
+                  </li>
+                  <li data-category="thinking">
+                    <a class="post-card" href="?view=article">
+                      <span class="post-card__number">04</span>
+                      <span class="post-card__body"><span class="post-card__meta">长期思考 <span class="divider-dot">·</span> 2026.09.12</span><strong>给阅读留下一点空间</strong><span class="post-card__tags"># 阅读　# 设计</span></span>
+                      <span class="post-card__arrow" aria-hidden="true">↗</span>
+                    </a>
+                  </li>
+                </ol>
+                <div class="pagination-preview"><span>01 / 01</span><span>本页已显示全部文章</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="prototype-page" id="article-page" aria-labelledby="article-title" hidden>
+          <div class="content-wrap">
+            <div class="article-topline"><a href="./index.html">← 返回文章列表</a><span>02 / READING</span></div>
+            <header class="article-hero">
+              <div class="article-hero__label"><span class="red-square" aria-hidden="true"></span><span>工程实践 / ENGINEERING</span></div>
+              <h1 id="article-title">让复杂系统<br />保持简单<span class="article-hero__period">.</span></h1>
+              <p class="article-hero__summary">一个个人博客的架构笔记：让内容、代码和部署都保持可理解。</p>
+              <div class="article-hero__meta"><span>2026 年 10 月 2 日</span><span>工程实践</span><span>Go / 架构设计 / 个人项目</span></div>
+            </header>
+
+            <div class="reading-layout">
+              <aside class="article-rail" aria-label="文章大纲">
+                <p class="small-label">ON THIS PAGE</p>
+                <nav>
+                  <a href="#why-simple">01　从问题出发</a>
+                  <a href="#keep-boundaries">02　保持清晰的边界</a>
+                  <a href="#readable-code">03　让代码可以阅读</a>
+                </nav>
+                <span class="article-rail__rule" aria-hidden="true"></span>
+                <p>文章大纲始终靠近正文，帮助读者在长文中定位。</p>
+              </aside>
+              <article class="article-body">
+                <p class="article-body__lead">系统的复杂性不会因为我们忽略它而消失。好的设计，是让每一部分都有清晰的位置，让下一位阅读代码的人能够顺着线索继续走下去。</p>
+                <h2 id="why-simple"><span>01</span> 从问题出发</h2>
+                <p>个人博客的任务很明确：发布内容、展示文章，以及让读者舒服地阅读。围绕这些真实任务设计页面，比增加更多装饰和入口更有价值。</p>
+                <p>首页需要帮助访客快速扫描标题、时间与主题；文章页则应该让正文占据视觉中心。信息的先后顺序，决定了阅读时的节奏。</p>
+                <blockquote>减少无关的视觉噪声，让文章本身成为页面最重要的元素。</blockquote>
+                <h2 id="keep-boundaries"><span>02</span> 保持清晰的边界</h2>
+                <p>网格为内容提供秩序。标题可以大胆，辅助信息要克制；侧栏负责导航，正文只承担阅读。手机屏幕较窄时，这些区域会按阅读顺序自然排列。</p>
+                <div class="reading-note"><span>DESIGN NOTE</span><p>正文控制在适合中文长文阅读的宽度，段落采用较宽松的行距。代码块保留横向滚动，避免挤压整页。</p></div>
+                <h2 id="readable-code"><span>03</span> 让代码可以阅读</h2>
+                <p>技术文章常包含代码。代码区需要清楚地区分于正文，同时保持足够的对比和可扫描性。</p>
+                <div class="code-sample"><div class="code-sample__head"><span>GO / EXAMPLE</span><span>01 — 06</span></div><pre><code><span class="code-line"><em>01</em>func publish(post Post) error {</span><span class="code-line"><em>02</em>    if post.Title == "" {</span><span class="code-line"><em>03</em>        return errors.New("标题不能为空")</span><span class="code-line"><em>04</em>    }</span><span class="code-line"><em>05</em>    return store.Save(post)</span><span class="code-line"><em>06</em>}</span></code></pre></div>
+                <p>最终的目标不是让设计引人注目，而是让读者愿意继续读下一段。</p>
+                <div class="article-end"><span>— END OF ARTICLE —</span><a href="./index.html">返回全部文章 ↗</a></div>
+              </article>
+              <div class="reading-margin" aria-hidden="true">HXY / 2026</div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer"><div class="content-wrap"><strong>hxy.blog</strong><span>思考有迹，文字有形。</span><span>© 2026 HXY</span></div></footer>
+    </div>
+    <script>
+      // 一个文件承载两张原型，便于用链接直接评审列表和阅读状态。
+      const articleView = new URLSearchParams(location.search).get('view') === 'article'
+      document.getElementById('list-page').hidden = articleView
+      document.getElementById('article-page').hidden = !articleView
+      document.querySelector(`[data-nav="${articleView ? 'article' : 'list'}"]`).setAttribute('aria-current', 'page')
+      document.title = `${articleView ? '文章详情' : '文章列表'} · hxy.blog 瑞士风格原型`
+
+      // 原型中的分类筛选只操作示例卡片，用于评审现有分类入口的视觉状态。
+      const cards = document.querySelectorAll('.post-list li')
+      document.querySelectorAll('[data-filter]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const category = button.dataset.filter
+          let visible = 0
+          cards.forEach((card) => {
+            card.hidden = category !== 'all' && card.dataset.category !== category
+            if (!card.hidden) visible += 1
+          })
+          document.querySelectorAll('[data-filter]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)))
+          document.getElementById('post-count').textContent = `共 ${String(visible).padStart(2, '0')} 篇`
+        })
+      })
+    </script>
+  </body>
+</html>
