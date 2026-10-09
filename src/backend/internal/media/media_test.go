@@ -9,11 +9,14 @@ import (
 	"hash/crc32"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"io"
 	"testing"
 	"time"
+
+	"golang.org/x/image/bmp"
 )
 
 type repositoryStub struct {
@@ -137,6 +140,70 @@ func TestInspectImageAcceptsWebP(t *testing.T) {
 	}
 }
 
+func TestInspectImageAcceptsBMPAndAnimatedGIF(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      []byte
+		mimeType  string
+		extension string
+	}{
+		{name: "bmp", data: encodeBMP(t, 3, 2), mimeType: "image/bmp", extension: "bmp"},
+		{name: "gif", data: encodeAnimatedGIF(t), mimeType: "image/gif", extension: "gif"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			info, err := inspectImage(bytes.NewReader(test.data))
+			if err != nil {
+				t.Fatalf("inspectImage() error = %v", err)
+			}
+			if info.mimeType != test.mimeType || info.extension != test.extension || info.width != 3 || info.height != 2 {
+				t.Fatalf("image info = %#v", info)
+			}
+		})
+	}
+}
+
+func TestInspectImageRejectsCorruptLaterGIFFrame(t *testing.T) {
+	data := encodeAnimatedGIF(t)
+	_, err := inspectImage(bytes.NewReader(data[:len(data)-3]))
+	if !errors.Is(err, ErrInvalidImage) {
+		t.Fatalf("inspectImage() error = %v, want %v", err, ErrInvalidImage)
+	}
+}
+
+func TestInspectImageRejectsGIFFrameBudget(t *testing.T) {
+	palette := color.Palette{color.Black, color.White}
+	animation := &gif.GIF{Image: make([]*image.Paletted, maxGIFFrames+1), Delay: make([]int, maxGIFFrames+1)}
+	for index := range animation.Image {
+		animation.Image[index] = image.NewPaletted(image.Rect(0, 0, 1, 1), palette)
+	}
+	var buffer bytes.Buffer
+	if err := gif.EncodeAll(&buffer, animation); err != nil {
+		t.Fatalf("encode GIF: %v", err)
+	}
+	_, err := inspectImage(bytes.NewReader(buffer.Bytes()))
+	if !errors.Is(err, ErrInvalidDimensions) {
+		t.Fatalf("inspectImage() error = %v, want %v", err, ErrInvalidDimensions)
+	}
+}
+
+func TestServiceKeepsAnimatedGIFBytes(t *testing.T) {
+	repository := &repositoryStub{}
+	storage := &storageStub{}
+	service, err := NewService(repository, storage, bytes.NewReader(bytes.Repeat([]byte{0x2a}, 16)), "https://media.example.com")
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	animation := encodeAnimatedGIF(t)
+	asset, err := service.Upload(context.Background(), bytes.NewReader(animation))
+	if err != nil {
+		t.Fatalf("Upload() error = %v", err)
+	}
+	if asset.MIMEType != "image/gif" || storage.putMIME != "image/gif" || !bytes.HasSuffix([]byte(asset.ObjectKey), []byte(".gif")) || !bytes.Equal(storage.putBody, animation) {
+		t.Fatalf("GIF upload metadata or original bytes changed: asset = %#v, MIME = %q", asset, storage.putMIME)
+	}
+}
+
 func addPNGEXIF(t *testing.T, source []byte) []byte {
 	t.Helper()
 	if len(source) < 33 {
@@ -198,6 +265,30 @@ func encodeJPEG(t *testing.T, width, height int) []byte {
 	picture.Set(0, 0, color.White)
 	if err := jpeg.Encode(&buffer, picture, nil); err != nil {
 		t.Fatalf("encode JPEG: %v", err)
+	}
+	return buffer.Bytes()
+}
+
+func encodeBMP(t *testing.T, width, height int) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	if err := bmp.Encode(&buffer, image.NewRGBA(image.Rect(0, 0, width, height))); err != nil {
+		t.Fatalf("encode BMP: %v", err)
+	}
+	return buffer.Bytes()
+}
+
+func encodeAnimatedGIF(t *testing.T) []byte {
+	t.Helper()
+	palette := color.Palette{color.Black, color.White}
+	frames := []*image.Paletted{
+		image.NewPaletted(image.Rect(0, 0, 3, 2), palette),
+		image.NewPaletted(image.Rect(0, 0, 3, 2), palette),
+	}
+	frames[1].SetColorIndex(0, 0, 1)
+	var buffer bytes.Buffer
+	if err := gif.EncodeAll(&buffer, &gif.GIF{Image: frames, Delay: []int{5, 5}}); err != nil {
+		t.Fatalf("encode GIF: %v", err)
 	}
 	return buffer.Bytes()
 }

@@ -12,7 +12,7 @@ describe('PostDetail', () => {
           slug: 'hello-world',
           title: '第一篇文章',
           contentMarkdown:
-            '## 小标题\n\n### 子章节\n\n- 列表项\n\n```go\n/* 第一行\n第二行 */\nfmt.Println("hello")\n```\n\n```python\nprint("hello")\n```\n\n```mermaid\ngraph LR\n  A --> B\n```\n\n公式 $E = mc^2$\n\n![系统架构图](https://media.hxy2333.site/media/test.png)\n\n![危险图片](javascript:alert(1))\n\n[外部链接](https://example.com)\n\n<script>alert("xss")</script>',
+            '## 小标题\n\n### 子章节\n\n- 列表项\n\n```go\n/* 第一行\n第二行 */\nfmt.Println("hello")\n```\n\n```python\nprint("hello")\n```\n\n```mermaid\ngraph LR\n  A --> B\n```\n\n公式 $E = mc^2$\n\n![系统架构图](https://media.hxy2333.site/media/test.png)\n\n![位图](https://media.hxy2333.site/media/test.bmp)\n\n![动画](https://media.hxy2333.site/media/test.gif)\n\n![危险图片](javascript:alert(1))\n\n[外部链接](https://example.com)\n\n<script>alert("xss")</script>',
           publishedAt: '2026-10-01T02:03:04Z',
           category: { slug: 'engineering', name: '工程' },
           tags: ['Go'],
@@ -42,6 +42,12 @@ describe('PostDetail', () => {
     expect(html).toContain('Go')
     expect(html).toContain(
       '<img src="https://media.hxy2333.site/media/test.png" alt="系统架构图"',
+    )
+    expect(html).toContain(
+      '<img src="https://media.hxy2333.site/media/test.bmp" alt="位图"',
+    )
+    expect(html).toContain(
+      '<img src="https://media.hxy2333.site/media/test.gif" alt="动画"',
     )
     expect(html).not.toContain('javascript:')
     expect(html).not.toContain('<script')

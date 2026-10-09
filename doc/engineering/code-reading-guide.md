@@ -32,7 +32,7 @@
 
 文章后台通过 `/api/admin/posts` 读写草稿，所有路由先验证 Access JWT。草稿允许正文为空，方便分步保存；发布动作则使用带状态和非空正文条件的原子更新，只有 `draft` 能转为 `published`。发布后文章不可再编辑，公开列表和详情缓存会同时失效。后台编辑器与访客详情共用经过清洗的 Markdown 渲染组件，避免预览和正式页面采用不同安全规则。
 
-图片上传遵循 `React 编辑器 → Axios multipart → Nginx 流式代理 → 管理员鉴权 → Media Service → 腾讯云 COS + MySQL`。浏览器只把文件对象保存在组件内存，Redux 保存文件名、进度、错误和媒体结果等可序列化状态；上传成功后把带替代文本的 Markdown 插入当前光标位置。Nginx 接受包含 multipart 开销的 11 MiB 请求并关闭请求体缓冲，Go API 再以 10 MiB 文件上限、格式签名、完整解码、尺寸/像素和 EXIF 规则执行最终校验。
+图片上传遵循 `React 编辑器 → Axios multipart → Nginx 流式代理 → 管理员鉴权 → Media Service → 腾讯云 COS + MySQL`。浏览器只把文件对象保存在组件内存，Redux 保存文件名、进度、错误和媒体结果等可序列化状态；上传成功后把带替代文本的 Markdown 插入当前光标位置。Nginx 接受包含 multipart 开销的 11 MiB 请求并关闭请求体缓冲，Go API 再以 10 MiB 文件上限、格式签名、完整解码、尺寸/像素和 EXIF 规则执行最终校验。Sprint 6 起允许 BMP 与 GIF；GIF 先限制帧数和累积像素，再解码全部帧，原文件写入 COS 以保留动画。
 
 Media Service 使用不可预测对象键和 `Content-MD5` 写入 COS，并通过禁止覆盖请求头处理极小概率键冲突。COS 写入成功后才保存 `media_assets`；数据库失败时使用独立超时上下文补偿删除对象。正式正文只接收 `MEDIA_PUBLIC_BASE_URL` 生成的稳定 HTTPS URL，不保存 COS 默认域名。没有完整配置四个 `MEDIA_*` 变量时应用仍可启动，但上传明确返回可重试的 503，不回退到服务器磁盘。
 
