@@ -5,6 +5,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import App from './App'
 import { store } from './app/store'
 import './styles.css'
+import './public.css'
 
 // index.html 提供唯一挂载点；缺失时立即失败比渲染空白页更容易定位构建问题。
 const root = document.getElementById('root')

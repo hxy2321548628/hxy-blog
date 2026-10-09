@@ -1,12 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import PostDetail from './PostDetail'
 
 describe('PostDetail', () => {
   it('安全渲染文章 Markdown 与发布时间', () => {
     const html = renderToStaticMarkup(
-      <PostDetail
-        post={{
+      <MemoryRouter>
+        <PostDetail
+          post={{
           slug: 'hello-world',
           title: '第一篇文章',
           contentMarkdown:
@@ -14,8 +16,9 @@ describe('PostDetail', () => {
           publishedAt: '2026-10-01T02:03:04Z',
           category: { slug: 'engineering', name: '工程' },
           tags: ['Go'],
-        }}
-      />,
+          }}
+        />
+      </MemoryRouter>,
     )
 
     expect(html).toContain('<h1>第一篇文章</h1>')

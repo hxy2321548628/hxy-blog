@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
+import SiteFooter from '../../components/SiteFooter'
 import SiteHeader from '../../components/SiteHeader'
 import PostDetail from './PostDetail'
 import { useGetPostQuery } from './postApi'
@@ -16,9 +17,10 @@ function PostDetailPage() {
       </a>
       <SiteHeader />
       <main className="article-shell" id="main-content">
-        <Link className="back-link" to="/">
-          ← 返回文章列表
-        </Link>
+        <div className="article-topline">
+          <Link className="back-link" to="/">← 返回文章列表</Link>
+          <span>02 / READING</span>
+        </div>
         {isLoading && (
           <p className="request-state" role="status">
             正在读取文章…
@@ -38,6 +40,7 @@ function PostDetailPage() {
         )}
         {data && <PostDetail post={data} />}
       </main>
+      <SiteFooter />
     </>
   )
 }

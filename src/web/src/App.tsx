@@ -27,7 +27,8 @@ function App() {
   const isPublicRoute = !pathname.startsWith('/admin')
 
   return (
-    <>
+    // 公开页统一继承阅读配色，管理端保留原有样式；音乐控件也随路由进入同一容器。
+    <div className={isPublicRoute ? 'public-app' : undefined}>
       <SessionBootstrap />
       {isPublicRoute ? <BackgroundMusic /> : null}
       <Routes>
@@ -68,7 +69,7 @@ function App() {
         </Route>
         <Route path="*" element={<PostListPage />} />
       </Routes>
-    </>
+    </div>
   )
 }
 
