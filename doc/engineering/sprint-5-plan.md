@@ -1,7 +1,7 @@
 # Sprint 5 开发计划
 
 - 日期：2026-10-09
-- 状态：前台重构已实施，待 Pull Request 与部署验证
+- 状态：前台重构已合并并部署，生产内容人工验收待记录
 - Sprint 目标：把已确认的瑞士风格原型用于真实文章列表与详情，在不改变现有内容能力的前提下发布。
 
 ## 目标与范围
@@ -52,3 +52,10 @@
 - 使用仅在本机运行的示例 API，以 1440px、390px、320px 宽度检查真实 React 列表与详情布局；桌面标题、手机大纲和代码块符合原型方向。
 - 分类 URL `?category=engineering` 正确显示对应文章和当前分类；不存在的文章显示 404 专用状态。
 - `make check` 已通过，包含前后端测试、ESLint、TypeScript 构建和部署配置检查。
+
+## 合并与发布记录
+
+- [PR #20](https://github.com/hxy2321548628/hxy-blog/pull/20) 的 `check` 通过，已于 2026-10-09 合并到 `main`，合并提交为 `3dfb92d`。
+- 合并提交的 [CI](https://github.com/hxy2321548628/hxy-blog/actions/runs/37874773599) 和 [Release](https://github.com/hxy2321548628/hxy-blog/actions/runs/37875066497) 均成功；Release 的镜像发布与生产部署作业均成功。
+- 部署入口在成功返回前检查 Compose 容器状态、Web `/healthz` 与 API `/api/health`，因此发布流水线已覆盖服务健康状态。
+- 目前没有生产环境真实文章列表、分类和文章详情的人工读取记录；该项仍需验收，不据此宣称 Sprint 5 全部完成。
