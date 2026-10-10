@@ -19,6 +19,20 @@
   font-family: Arial, 'Helvetica Neue', 'PingFang SC', 'Noto Sans CJK SC', 'Microsoft YaHei', sans-serif;
 }
 
+:root[data-theme='dark'] .public-app {
+  /* 公开页继续使用黑白红的瑞士风格，暗色时分别提高正文与红色交互的对比度。 */
+  --canvas: #151719;
+  --surface-muted: #25282a;
+  --text-primary: #f1f2ed;
+  --text-secondary: #c0c3bd;
+  --text-tertiary: #c0c3bd;
+  --border-subtle: #505453;
+  --border-strong: #e1e3dd;
+  --accent: #ff7065;
+  --accent-hover: #ff9489;
+  --focus-ring: 0 0 0 3px rgba(255, 112, 101, 0.45);
+}
+
 .public-app > main { flex: 1; }
 .public-app .skip-link { border-radius: 0; }
 .public-app .red-square { display: inline-block; flex: none; width: 11px; height: 11px; background: var(--accent); }
@@ -33,6 +47,8 @@
 .public-app .site-nav { margin-left: auto; }
 .public-app .site-nav__link { padding: 0; border-radius: 0; color: var(--text-primary); font-size: 13px; font-weight: 700; }
 .public-app .site-nav__link:hover, .public-app .site-nav__link[aria-current='page'] { color: var(--accent); background: transparent; }
+.public-app .theme-toggle { border: 0; border-radius: 0; font-size: 12px; font-weight: 700; }
+.public-app .theme-toggle:hover { color: var(--accent); background: transparent; }
 
 .public-app .page-shell, .public-app .article-shell { width: min(1320px, calc(100% - 112px)); padding: 0; }
 .public-app .journal-index { display: flex; justify-content: space-between; padding: 21px 0 20px; border-bottom: 1px solid var(--border-subtle); font-size: 11px; font-weight: 700; letter-spacing: .14em; }

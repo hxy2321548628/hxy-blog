@@ -12,6 +12,8 @@
   --accent-hover: #833f25;
   --danger: #8a352f;
   --focus-ring: 0 0 0 3px rgba(156, 79, 47, 0.22);
+  --floating-surface: rgba(244, 240, 231, 0.94);
+  --floating-shadow: 0 8px 24px rgba(38, 37, 31, 0.12);
   color: var(--text-primary);
   background: var(--canvas);
   font-family:
@@ -19,6 +21,24 @@
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  /* 暗色使用分层表面与较亮的文字，保留管理端原有暖色强调。 */
+  --canvas: #181a1d;
+  --surface-muted: #25282b;
+  --text-primary: #f2eee5;
+  --text-secondary: #c6c1b7;
+  --text-tertiary: #a9a398;
+  --border-subtle: #494d50;
+  --border-strong: #828689;
+  --accent: #dfa184;
+  --accent-hover: #f0b89d;
+  --danger: #ff9b91;
+  --focus-ring: 0 0 0 3px rgba(223, 161, 132, 0.4);
+  --floating-surface: rgba(37, 40, 43, 0.96);
+  --floating-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 * {
@@ -71,8 +91,8 @@ a:focus-visible {
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   color: var(--text-primary);
-  background: rgba(244, 240, 231, 0.94);
-  box-shadow: 0 8px 24px rgba(38, 37, 31, 0.12);
+  background: var(--floating-surface);
+  box-shadow: var(--floating-shadow);
   cursor: pointer;
   font-size: 13px;
   transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
@@ -151,6 +171,28 @@ a:focus-visible {
 
 .site-nav__link:hover {
   color: var(--text-primary);
+  background: var(--surface-muted);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.theme-toggle:hover {
+  color: var(--accent-hover);
   background: var(--surface-muted);
 }
 
@@ -477,6 +519,20 @@ h1 {
   background: transparent;
 }
 
+/* highlight.js 的 GitHub 浅色主题会把颜色写死；暗色时只覆盖代码语义色。 */
+:root[data-theme='dark'] .article-content .hljs { color: #d4d9df; background: transparent; }
+:root[data-theme='dark'] .article-content :is(.hljs-doctag, .hljs-keyword, .hljs-template-tag, .hljs-template-variable, .hljs-type, .hljs-variable.language_) { color: #ff9b95; }
+:root[data-theme='dark'] .article-content :is(.hljs-title, .hljs-title.class_, .hljs-title.function_) { color: #d8b4ff; }
+:root[data-theme='dark'] .article-content :is(.hljs-attr, .hljs-attribute, .hljs-literal, .hljs-meta, .hljs-number, .hljs-operator, .hljs-variable, .hljs-selector-attr, .hljs-selector-class, .hljs-selector-id, .hljs-section) { color: #90c8ff; }
+:root[data-theme='dark'] .article-content :is(.hljs-regexp, .hljs-string, .hljs-meta .hljs-string) { color: #b5dcff; }
+:root[data-theme='dark'] .article-content :is(.hljs-built_in, .hljs-symbol) { color: #ffb87a; }
+:root[data-theme='dark'] .article-content :is(.hljs-comment, .hljs-code, .hljs-formula) { color: #aeb5bc; }
+:root[data-theme='dark'] .article-content :is(.hljs-name, .hljs-quote, .hljs-selector-tag, .hljs-selector-pseudo) { color: #98df9d; }
+:root[data-theme='dark'] .article-content :is(.hljs-subst, .hljs-emphasis, .hljs-strong) { color: #d4d9df; }
+:root[data-theme='dark'] .article-content .hljs-bullet { color: #f0d17c; }
+:root[data-theme='dark'] .article-content .hljs-addition { color: #b8ebba; background: #1c4429; }
+:root[data-theme='dark'] .article-content .hljs-deletion { color: #ffc3bd; background: #5b2428; }
+
 .article-content .code-line {
   display: block;
   min-width: max-content;
@@ -519,7 +575,7 @@ h1 {
   padding: 20px;
   border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  background: #fff;
+  background: var(--canvas);
 }
 
 .mermaid-loading {
@@ -636,6 +692,14 @@ h1 {
   padding: 48px 0 112px;
 }
 
+.auth-shell__topline,
+.admin-header__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .admin-shell {
   width: min(1120px, calc(100% - 64px));
   margin: 0 auto;
@@ -744,6 +808,10 @@ h1 {
 
 .admin-header__back:hover {
   color: var(--accent-hover);
+}
+
+:root[data-theme='dark'] .status-badge--published {
+  border-color: var(--accent);
 }
 
 .button-secondary,

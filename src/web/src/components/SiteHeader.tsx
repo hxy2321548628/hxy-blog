@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
+import ThemeToggle from './ThemeToggle'
 
 function SiteHeader() {
   const isListPage = useLocation().pathname === '/'
@@ -20,6 +21,7 @@ function SiteHeader() {
             文章
           </Link>
         </nav>
+        <ThemeToggle />
       </div>
     </header>
   )

@@ -6,6 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="hxy 的个人博客" />
     <title>hxy 的个人博客</title>
+    <script>
+      // 在样式和 React 加载前确定主题，避免刷新时先出现浅色页面。
+      let savedTheme = null
+      try {
+        savedTheme = localStorage.getItem('hxy-blog-theme')
+      } catch {
+        // 浏览器拒绝存储访问时仍按系统偏好展示。
+      }
+      document.documentElement.dataset.theme =
+        savedTheme === 'light' || savedTheme === 'dark'
+          ? savedTheme
+          : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    </script>
   </head>
   <body>
     <!-- React 只接管这个挂载点；静态 HTML 保持最小，页面内容由组件渲染。 -->
