@@ -1,6 +1,6 @@
 name: Release
 
-# 流程概览：main 的 CI 成功 → 构建并推送两个 GHCR 镜像 → 记录不可变 Digest
+# 流程概览：main 的 CI 成功 → Task 构建并推送两个 GHCR 镜像 → 记录不可变 Digest
 # → 等待 production Environment 人工批准 → 通过受限 SSH 命令让服务器按 Digest 部署。
 on:
   # 只有 main 的 CI 完成后才考虑发布，避免 Release 与 CI 并发竞速。
@@ -24,7 +24,8 @@ jobs:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -39,11 +40,18 @@ jobs:
       API_IMAGE: ghcr.io/${{ github.repository_owner }}/hxy-blog-api
       WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/hxy-blog-web
       HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      CI_RUN_URL: ${{ github.event.workflow_run.html_url }}
+      RELEASE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       # 必须检出通过 CI 的精确提交，不能隐式使用此时的 main HEAD。
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+
+      # 发布逻辑与本地 Task 入口一致；只安装工具，不在生产主机执行构建。
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
+        with:
+          version: 3.53.1
 
       - name: 登录 GHCR
         env:
@@ -52,65 +60,10 @@ jobs:
         run: |
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
 
-      - name: 构建 linux/amd64 镜像
-        run: |
-          set -eu
-          # sha-<完整 Commit> 是人可读的不可变标签，main 只是便于浏览的指针。
-          immutable_tag="sha-${HEAD_SHA}"
-
-          # 生产服务器是 amd64；显式指定平台可避免开发机架构影响产物。
-          docker build \
-            --platform linux/amd64 \
-            --build-arg VERSION="$immutable_tag" \
-            --build-arg REVISION="$HEAD_SHA" \
-            --tag "${API_IMAGE}:${immutable_tag}" \
-            --tag "${API_IMAGE}:main" \
-            src/backend
-
-          docker build \
-            --platform linux/amd64 \
-            --build-arg VERSION="$immutable_tag" \
-            --build-arg REVISION="$HEAD_SHA" \
-            --tag "${WEB_IMAGE}:${immutable_tag}" \
-            --tag "${WEB_IMAGE}:main" \
-            src/web
-
-      - name: 推送不可变镜像和 main 指针
-        run: |
-          set -eu
-          immutable_tag="sha-${HEAD_SHA}"
-
-          # 先发布两个不可变版本，再更新便于查看的 main 浮动标签。
-          docker push "${API_IMAGE}:${immutable_tag}"
-          docker push "${WEB_IMAGE}:${immutable_tag}"
-          docker push "${API_IMAGE}:main"
-          docker push "${WEB_IMAGE}:main"
-
-      - name: 记录发布 Digest
+      # 一次调用完成构建、发布和 Digest 记录，作业输出供部署复用。
+      - name: 发布已验证提交的镜像
         id: digests
-        run: |
-          set -eu
-          immutable_tag="sha-${HEAD_SHA}"
-          api_digest="$(docker buildx imagetools inspect "${API_IMAGE}:${immutable_tag}" | awk '$1 == "Digest:" { print $2; exit }')"
-          web_digest="$(docker buildx imagetools inspect "${WEB_IMAGE}:${immutable_tag}" | awk '$1 == "Digest:" { print $2; exit }')"
-
-          # Digest 为空时禁止继续部署，避免服务器收到不完整发布参数。
-          test -n "$api_digest"
-          test -n "$web_digest"
-
-          # GITHUB_OUTPUT 把值安全传给 needs.publish.outputs，不需要重复解析日志。
-          echo "api_digest=${api_digest}" >> "$GITHUB_OUTPUT"
-          echo "web_digest=${web_digest}" >> "$GITHUB_OUTPUT"
-
-          # GITHUB_STEP_SUMMARY 只展示非敏感发布元数据，便于人工审批时核对。
-          {
-            echo '## GHCR 发布结果'
-            echo
-            echo '| 镜像 | Commit 标签 | Digest |'
-            echo '| --- | --- | --- |'
-            echo "| API | \`${immutable_tag}\` | \`${api_digest}\` |"
-            echo "| Web | \`${immutable_tag}\` | \`${web_digest}\` |"
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: task release:publish
 
   deploy:
     name: 部署到腾讯云生产环境
@@ -123,35 +76,23 @@ jobs:
       # Environment 同时提供人工批准门禁、受保护分支限制和生产 Secrets。
       name: production
     env:
+      DEPLOY_ENV: production
       HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
       API_DIGEST: ${{ needs.publish.outputs.api_digest }}
       WEB_DIGEST: ${{ needs.publish.outputs.web_digest }}
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-      DEPLOY_HOST_KEY: ${{ secrets.DEPLOY_HOST_KEY }}
     steps:
-      - name: 准备受限 SSH 凭据
-        run: |
-          set -eu
-          # Runner 是一次性的；仍使用 0700/0600，避免 SSH 因权限过宽而拒绝密钥。
-          install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy_key"
-          printf '%s\n' "$DEPLOY_HOST_KEY" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"
-
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
+        with:
+          version: 3.53.1
+      # 密钥只传给这一步；Task 校验环境、Commit 和 Digest 后调用受限 SSH 入口。
       - name: 调用服务器固定部署入口
-        run: |
-          set -eu
-          # BatchMode 禁止交互式密码；IdentitiesOnly 禁止尝试其他密钥；
-          # StrictHostKeyChecking 防止连接到伪造主机。服务器端公钥还绑定了强制命令。
-          ssh \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -i "$HOME/.ssh/deploy_key" \
-            -p "$DEPLOY_PORT" \
-            "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "deploy ${HEAD_SHA} ${API_DIGEST} ${WEB_DIGEST}"
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST_KEY: ${{ secrets.DEPLOY_HOST_KEY }}
+        run: task release:deploy

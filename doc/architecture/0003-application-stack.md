@@ -179,7 +179,7 @@ Redux 持久化插件不进入 MVP。Access JWT、上传文件对象和临时预
 
 | 阶段 | 交付物 | 验证方式 |
 | --- | --- | --- |
-| 1. 基础依赖 | Gin、GORM、Goose、React Router、Axios、Redux Toolkit | 锁文件审查和 `make check` |
+| 1. 基础依赖 | Gin、GORM、Goose、React Router、Axios、Redux Toolkit | 锁文件审查和 `task check` |
 | 2. 数据边界 | MySQL 连接、迁移命令和 Repository 骨架 | 真实 MySQL 集成测试 |
 | 3. 前端边界 | Router、Store、Axios baseQuery 和错误模型 | 单元测试与生产构建 |
 | 4. 内容链路 | Markdown 编辑、预览和安全渲染 | XSS 用例与端到端测试 |
@@ -200,4 +200,3 @@ Redux 持久化插件不进入 MVP。Access JWT、上传文件对象和临时预
 - [Redux Toolkit](https://redux.js.org/introduction/why-rtk-is-redux-today)
 - [React Router SPA](https://reactrouter.com/how-to/spa)
 - [react-markdown](https://github.com/remarkjs/react-markdown)
-

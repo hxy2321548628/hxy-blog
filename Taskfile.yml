@@ -1,0 +1,176 @@
+# Task 是本地和 CI 的统一入口；版本下限与 CI 安装版本一致。
+version: '3.53.1'
+
+env:
+  # Go 缓存留在已忽略的仓库目录，便于隔离环境重复运行检查。
+  GOCACHE: '{{.ROOT_DIR}}/.cache/go-build'
+
+tasks:
+  default:
+    cmds:
+      - task: help
+
+  help:
+    desc: 列出可用任务
+    cmds:
+      - task --list
+
+  install:
+    desc: 按 Go 模块和前端锁文件安装依赖
+    cmds:
+      - go -C src/backend mod download
+      - npm --prefix src/web ci
+
+  fmt:
+    desc: 格式化 Go 代码
+    cmds:
+      - gofmt -w src/backend
+
+  fmt-check:
+    desc: 只检查 Go 格式，不修改源码
+    cmds:
+      - test -z "$(gofmt -l src/backend)" || { echo "Go 文件需要格式化，请运行 task fmt"; exit 1; }
+
+  vet:
+    desc: 运行 Go 静态检查
+    cmds:
+      - go -C src/backend vet ./...
+
+  test-go:
+    desc: 运行 Go 测试
+    cmds:
+      - go -C src/backend test ./...
+
+  test-web:
+    desc: 运行 React 组件测试
+    cmds:
+      - npm --prefix src/web test
+
+  test-media-cos:
+    desc: 对显式指定的隔离 COS 桶执行媒体往返测试
+    cmds:
+      - go -C src/backend test -tags=cosintegration ./internal/media -run '^TestCOSStorageRoundTrip$'
+
+  test:
+    desc: 运行 Go 与 React 自动化测试
+    cmds:
+      - task: test-go
+      - task: test-web
+
+  check-web:
+    desc: 检查并构建 React 前端
+    cmds:
+      - npm --prefix src/web run check
+
+  check-deploy:
+    desc: 检查部署脚本、备份文件名和 CAM JSON
+    cmds:
+      # 只解析脚本和策略，不连接生产服务器或读取生产配置。
+      - bash -n deploy/scripts/deploy.sh deploy/scripts/ssh-entry.sh deploy/scripts/backup-db.sh deploy/scripts/restore-drill.sh deploy/scripts/install-coscli.sh deploy/scripts/configure-coscli.sh deploy/scripts/sync-backup-cos.sh deploy/scripts/fetch-backup-cos.sh deploy/scripts/backup-current-db.sh deploy/scripts/ci-migration.sh deploy/scripts/ci-smoke.sh deploy/scripts/publish-images.sh deploy/scripts/deploy-production.sh
+      - bash -c '[[ "20260930T032152Z-sha-8aa51a66049e.sql.gz" =~ ^[0-9]{8}T[0-9]{6}([0-9]{9})?Z-sha-[0-9a-f]{12}\.sql\.gz$ ]]'
+      - bash -c '[[ "20260930T032152643485203Z-sha-8aa51a66049e.sql.gz" =~ ^[0-9]{8}T[0-9]{6}([0-9]{9})?Z-sha-[0-9a-f]{12}\.sql\.gz$ ]]'
+      - python3 -m json.tool deploy/cam/cos-backup-policy.json > /dev/null
+      - python3 -m json.tool deploy/cam/cos-media-policy.json > /dev/null
+
+  container-config:
+    desc: 验证开发 Compose 配置
+    cmds:
+      - docker compose --env-file .env.example -f deploy/compose.yaml config --quiet
+
+  container-production-config:
+    desc: 验证生产 Compose 配置
+    cmds:
+      - docker compose --env-file .env.example -f deploy/compose.production.yaml config --quiet
+
+  lint:
+    desc: 执行源码和部署配置的静态检查
+    cmds:
+      - task: fmt-check
+      - task: vet
+      - npm --prefix src/web run lint
+      - task: container-config
+      - task: container-production-config
+      - task: check-deploy
+
+  build:
+    desc: 构建 Go API、迁移程序和 React 前端
+    cmds:
+      - mkdir -p .cache/bin
+      - go -C src/backend build -o ../../.cache/bin/api ./cmd/api
+      - go -C src/backend build -o ../../.cache/bin/migrate ./cmd/migrate
+      - npm --prefix src/web run build
+
+  check:
+    desc: 顺序运行提交前完整门禁
+    cmds:
+      # 按顺序停止在首个失败阶段，避免检查失败后仍继续生成制品。
+      - task: lint
+      - task: test
+      - task: build
+
+  container-build:
+    desc: 构建本地 API/Web 镜像
+    cmds:
+      - docker compose --env-file .env.example -f deploy/compose.yaml build
+
+  ci:migration:
+    desc: 用已构建的镜像验证真实 MySQL 迁移和回滚
+    cmds:
+      - bash deploy/scripts/ci-migration.sh
+
+  ci:smoke:
+    desc: 用已构建的镜像验证容器健康、API 代理与 SPA 路由
+    cmds:
+      - bash deploy/scripts/ci-smoke.sh
+
+  release:publish:
+    desc: 用显式提交和镜像地址构建、推送并记录生产镜像 Digest
+    cmds:
+      - bash deploy/scripts/publish-images.sh
+
+  release:deploy:
+    desc: 使用显式环境、提交和两个 Digest 调用服务器固定部署入口
+    cmds:
+      - bash deploy/scripts/deploy-production.sh
+
+  container-up:
+    desc: 构建并启动本地容器栈，先完成迁移
+    cmds:
+      - docker compose --env-file .env -f deploy/compose.yaml build api web
+      - docker compose --env-file .env -f deploy/compose.yaml up -d mysql --wait
+      - docker compose --env-file .env -f deploy/compose.yaml run --rm --no-deps --entrypoint /app/migrate api up
+      - docker compose --env-file .env -f deploy/compose.yaml up -d api web
+
+  container-down:
+    desc: 停止本地容器，保留 MySQL 数据卷
+    cmds:
+      - docker compose --env-file .env -f deploy/compose.yaml down
+
+  dev-db:
+    desc: 启动本地 MySQL
+    cmds:
+      - docker compose --env-file .env -f deploy/compose.yaml up -d mysql
+
+  dev-migrate:
+    desc: 对本地 MySQL 执行 Goose up
+    dotenv: [.env]
+    cmds:
+      - go -C src/backend run ./cmd/migrate up
+
+  dev-admin:
+    desc: 一次性创建本地管理员
+    dotenv: [.env]
+    cmds:
+      # 初始密码仅从未提交的 .env 进入进程环境，不拼进命令行。
+      - go -C src/backend run ./cmd/admin create
+
+  dev-backend:
+    desc: 启动 Go API
+    dotenv: [.env]
+    cmds:
+      - go -C src/backend run ./cmd/api
+
+  dev-web:
+    desc: 启动 React 开发服务器
+    cmds:
+      - npm --prefix src/web run dev

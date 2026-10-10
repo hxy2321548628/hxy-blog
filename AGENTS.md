@@ -15,6 +15,7 @@
 ## 必读文件
 
 - 技术章程：`.claude/constitution.md`
+- CICD规范：`.claude/cicd.md`
 - 代码规范：`.claude/code-style.md`
 - Git 规范：`.claude/git-command.md`
 - AI 开发流程：`doc/engineering/ai-coding-workflow.md`
@@ -43,7 +44,7 @@ test/          跨边界测试（必要时再创建）
 4. Bug 修复先补失败测试；新功能覆盖核心成功路径和关键失败路径。
 5. 只修改与当前需求直接相关的文件；发现无关问题时记录，不顺手重构。
 6. 添加依赖前说明必要性、许可证和资源成本；优先标准库。
-7. 任务完成前运行 `make check`；若无法运行，明确说明未验证项和原因。
+7. 任务完成前运行 `task check`；若无法运行，明确说明未验证项和原因。
 8. 涉及数据库 schema 的变更必须通过可回滚迁移完成，不得依赖手工改库。
 9. 日志和测试数据中不得出现密码、Token、Cookie 或完整连接串。
 10. 新增或修改代码时必须遵守 `.claude/code-style.md` 的学习友好注释规范；在关键逻辑和工程配置中用中文解释设计原因，并确保注释随行为同步更新。
@@ -51,9 +52,9 @@ test/          跨边界测试（必要时再创建）
 ## 常用命令
 
 ```bash
-make dev-db       # 使用已确认的 MySQL 8.0 镜像启动本地数据库
-make dev-backend  # 启动 Go API
-make dev-web      # 启动 React
-make test         # 运行测试
-make check        # 提交前完整检查
+task dev-db       # 使用已确认的 MySQL 8.0 镜像启动本地数据库
+task dev-backend  # 启动 Go API
+task dev-web      # 启动 React
+task test         # 运行测试
+task check        # 提交前完整检查
 ```
