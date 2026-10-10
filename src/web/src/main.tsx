@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { Provider } from 'react-redux'
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import App from './App'
+import ThemeProvider from './app/ThemeProvider'
 import { store } from './app/store'
 import './styles.css'
 import './public.css'
@@ -21,7 +22,9 @@ const router = createBrowserRouter([{ path: '*', element: <App /> }])
 createRoot(root).render(
   <StrictMode>
     <Provider store={store}>
-      <RouterProvider router={router} />
+      <ThemeProvider>
+        <RouterProvider router={router} />
+      </ThemeProvider>
     </Provider>
   </StrictMode>,
 )

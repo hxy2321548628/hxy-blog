@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { login } from './authSlice'
+import ThemeToggle from '../../components/ThemeToggle'
 
 function LoginPage() {
   const dispatch = useAppDispatch()
@@ -22,9 +23,12 @@ function LoginPage() {
 
   return (
     <main className="auth-shell">
-      <Link className="back-link" to="/">
-        ← 返回博客
-      </Link>
+      <div className="auth-shell__topline">
+        <Link className="back-link" to="/">
+          ← 返回博客
+        </Link>
+        <ThemeToggle />
+      </div>
 
       <section className="auth-panel" aria-labelledby="login-title">
         <p className="eyebrow">ADMIN</p>

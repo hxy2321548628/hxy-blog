@@ -1,18 +1,11 @@
 import { useEffect, useId, useState } from 'react'
+import { useTheme } from '../app/ThemeProvider'
 
 let mermaidLoader: Promise<typeof import('mermaid').default> | undefined
 
 function loadMermaid() {
   if (!mermaidLoader) {
-    mermaidLoader = import('mermaid').then(({ default: mermaid }) => {
-      // 严格模式会禁止图表源码注入脚本或任意链接。
-      mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: 'strict',
-        theme: 'neutral',
-      })
-      return mermaid
-    })
+    mermaidLoader = import('mermaid').then(({ default: mermaid }) => mermaid)
   }
   return mermaidLoader
 }
@@ -22,9 +15,11 @@ interface MermaidDiagramProps {
 }
 
 function MermaidDiagram({ source }: MermaidDiagramProps) {
+  const { theme } = useTheme()
   const reactID = useId()
   const [result, setResult] = useState<{
     source: string
+    theme: string
     svg: string | null
     failed: boolean
   } | null>(null)
@@ -33,19 +28,27 @@ function MermaidDiagram({ source }: MermaidDiagramProps) {
     let active = true
     const diagramID = `mermaid-${reactID.replace(/[^a-zA-Z0-9_-]/g, '')}`
     void loadMermaid()
-      .then((mermaid) => mermaid.render(diagramID, source))
+      .then((mermaid) => {
+        // 严格模式禁止图表源码注入脚本或任意链接；配色写入 SVG，切换时重新渲染。
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          theme: theme === 'dark' ? 'dark' : 'neutral',
+        })
+        return mermaid.render(diagramID, source)
+      })
       .then(({ svg: rendered }) => {
-        if (active) setResult({ source, svg: rendered, failed: false })
+        if (active) setResult({ source, theme, svg: rendered, failed: false })
       })
       .catch(() => {
-        if (active) setResult({ source, svg: null, failed: true })
+        if (active) setResult({ source, theme, svg: null, failed: true })
       })
     return () => {
       active = false
     }
-  }, [reactID, source])
+  }, [reactID, source, theme])
 
-  if (result?.source === source && result.failed) {
+  if (result?.source === source && result.theme === theme && result.failed) {
     return (
       <pre className="mermaid-error">
         <code>{source}</code>
@@ -53,7 +56,7 @@ function MermaidDiagram({ source }: MermaidDiagramProps) {
       </pre>
     )
   }
-  if (result?.source !== source || !result.svg) {
+  if (result?.source !== source || result.theme !== theme || !result.svg) {
     return (
       <div className="mermaid-loading" role="status">
         正在渲染图表…

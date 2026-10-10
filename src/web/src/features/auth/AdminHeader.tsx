@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../../app/hooks'
 import { logout } from './authSlice'
+import ThemeToggle from '../../components/ThemeToggle'
 
 interface AdminHeaderProps {
   title: string
@@ -23,13 +24,16 @@ function AdminHeader({ title, backTo }: AdminHeaderProps) {
         )}
         <h1>{title}</h1>
       </div>
-      <button
-        className="button-secondary"
-        type="button"
-        onClick={() => void dispatch(logout())}
-      >
-        退出登录
-      </button>
+      <div className="admin-header__actions">
+        <ThemeToggle />
+        <button
+          className="button-secondary"
+          type="button"
+          onClick={() => void dispatch(logout())}
+        >
+          退出登录
+        </button>
+      </div>
     </header>
   )
 }

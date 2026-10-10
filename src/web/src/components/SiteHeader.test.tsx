@@ -2,12 +2,15 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import SiteHeader from './SiteHeader'
+import ThemeProvider from '../app/ThemeProvider'
 
 describe('SiteHeader', () => {
   it('只展示已有页面的导航入口', () => {
     const html = renderToStaticMarkup(
       <MemoryRouter>
-        <SiteHeader />
+        <ThemeProvider>
+          <SiteHeader />
+        </ThemeProvider>
       </MemoryRouter>,
     )
 
