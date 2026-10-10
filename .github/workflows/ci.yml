@@ -1,7 +1,7 @@
 name: CI
 
-# 流程概览：安装依赖 → 运行代码质量门禁 → 构建镜像 → 在真实 MySQL 上验证迁移
-# → 启动 API/Web 镜像做跨容器冒烟测试。所有步骤都通过才产生名为 check 的状态。
+# 流程概览：Task 安装依赖与检查 → 构建镜像 → 真实 MySQL 迁移 → 容器冒烟。
+# 构建和测试逻辑在 Taskfile 与脚本中，本文件仅保留触发、权限和任务编排。
 on:
   # 所有合并到 main 的变更都必须先通过这条 PR 门禁。
   pull_request:
@@ -26,156 +26,28 @@ jobs:
     timeout-minutes: 10
     steps:
       # checkout 获取触发本次工作流的精确提交。PR 运行时是 GitHub 生成的合并测试提交。
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       # Go 版本从 go.mod 读取，避免工作流和源码分别维护版本号。
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
         with:
           go-version-file: src/backend/go.mod
           cache: true
       # Node 版本与前端构建镜像保持同一主版本，并以 lockfile 作为缓存键。
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: src/web/package-lock.json
-      # npm ci 严格按 package-lock.json 安装，锁文件不一致时直接失败。
-      - run: npm --prefix src/web ci
-      # 本地与 CI 共用 Makefile，确保开发者可以复现质量门禁。
-      - run: make check
+      # Task 与 Taskfile 使用同一固定版本；安装只影响 Runner，不进入生产镜像。
+      - uses: go-task/setup-task@a00fbb05ce67b35648be3c78cbc9fd85354c757e # v2.2.0
+        with:
+          version: 3.53.1
+      - run: task install
+      - run: task check
       # Dockerfile 也是交付代码，PR 必须证明两个生产镜像都能构建。
-      - run: make container-build
+      - run: task container-build
+      # 两个脚本在退出时清理隔离卷；任一步失败都会让 check 失败。
       - name: 验证 Goose up、幂等执行和 down
-        run: |
-          # -e 遇错退出，-u 拒绝未定义变量；任何断言失败都会使 Job 失败。
-          set -eu
-          # --wait 会等到 Compose 中的 MySQL healthcheck 成功后再返回。
-          docker compose --env-file .env.example -f deploy/compose.yaml up -d mysql --wait
-
-          # 使用即将发布的 API 镜像执行真实 MySQL 迁移，避免只验证 SQL 语法。
-          docker compose --env-file .env.example -f deploy/compose.yaml \
-            run --rm --no-deps --entrypoint /app/migrate api up
-          docker compose --env-file .env.example -f deploy/compose.yaml \
-            run --rm --no-deps --entrypoint /app/migrate api up
-
-          version="$(
-            docker compose --env-file .env.example -f deploy/compose.yaml exec -T mysql sh -ec '
-              MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" exec mysql \
-                --host=127.0.0.1 \
-                --user=root \
-                --batch \
-                --skip-column-names \
-                "${MYSQL_DATABASE}" \
-                --execute "SELECT MAX(version_id) FROM goose_db_version WHERE is_applied = 1;"
-            '
-          )"
-          # 当前最新版本应为 6；同时证明第二次 up 没有重复执行副作用。
-          test "$version" = 6
-
-          # 显式标记的集成测试连接真实 MySQL，验证索引、CHECK 和外键而不是仅检查 SQL 文本。
-          set -a
-          . ./.env.example
-          set +a
-          go -C src/backend test -tags=integration \
-            ./internal/migrations ./internal/post ./internal/auth ./internal/media -count=1
-
-          # down 后再次 up，证明迁移具备最小可回滚性且能重新应用。
-          docker compose --env-file .env.example -f deploy/compose.yaml \
-            run --rm --no-deps --entrypoint /app/migrate api down
-
-          # 一次 down 只恢复旧 MIME 白名单；检查约束内容，避免误回退分类等前序迁移。
-          mime_check="$(
-            docker compose --env-file .env.example -f deploy/compose.yaml exec -T mysql sh -ec '
-              MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" exec mysql \
-                --host=127.0.0.1 \
-                --user=root \
-                --batch \
-                --skip-column-names \
-                "${MYSQL_DATABASE}" \
-                --execute "SELECT CHECK_CLAUSE FROM information_schema.check_constraints
-                  WHERE constraint_schema = DATABASE()
-                  AND constraint_name = '"'"'chk_media_assets_mime_type'"'"';"
-            '
-          )"
-          test -n "$mime_check"
-          test "${mime_check#*image/gif}" = "$mime_check"
-
-          # 前序分类和基础表仍须存在，一次 down 不能连带删除已有内容模型。
-          remaining_taxonomy_tables="$(
-            docker compose --env-file .env.example -f deploy/compose.yaml exec -T mysql sh -ec '
-              MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" exec mysql \
-                --host=127.0.0.1 \
-                --user=root \
-                --batch \
-                --skip-column-names \
-                "${MYSQL_DATABASE}" \
-                --execute "SELECT COUNT(*) FROM information_schema.tables
-                  WHERE table_schema = DATABASE()
-                  AND table_name IN ('"'"'categories'"'"', '"'"'tags'"'"', '"'"'post_tags'"'"');"
-            '
-          )"
-          test "${remaining_taxonomy_tables}" = 3
-
-          base_tables="$(
-            docker compose --env-file .env.example -f deploy/compose.yaml exec -T mysql sh -ec '
-              MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" exec mysql \
-                --host=127.0.0.1 \
-                --user=root \
-                --batch \
-                --skip-column-names \
-                "${MYSQL_DATABASE}" \
-                --execute "SELECT COUNT(*) FROM information_schema.tables
-                  WHERE table_schema = DATABASE()
-                  AND table_name IN ('"'"'posts'"'"', '"'"'admins'"'"', '"'"'refresh_tokens'"'"', '"'"'media_assets'"'"');"
-            '
-          )"
-          test "${base_tables}" = 4
-
-          version="$(
-            docker compose --env-file .env.example -f deploy/compose.yaml exec -T mysql sh -ec '
-              MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" exec mysql \
-                --host=127.0.0.1 \
-                --user=root \
-                --batch \
-                --skip-column-names \
-                "${MYSQL_DATABASE}" \
-                --execute "SELECT MAX(version_id) FROM goose_db_version WHERE is_applied = 1;"
-            '
-          )"
-          test "$version" = 5
-
-          docker compose --env-file .env.example -f deploy/compose.yaml \
-            run --rm --no-deps --entrypoint /app/migrate api up
-
-          version="$(
-            docker compose --env-file .env.example -f deploy/compose.yaml exec -T mysql sh -ec '
-              MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" exec mysql \
-                --host=127.0.0.1 \
-                --user=root \
-                --batch \
-                --skip-column-names \
-                "${MYSQL_DATABASE}" \
-                --execute "SELECT MAX(version_id) FROM goose_db_version WHERE is_applied = 1;"
-            '
-          )"
-          test "$version" = 6
-      - name: 清理迁移测试数据库
-        # 即使前一步失败也清理卷，避免 GitHub Runner 留下测试状态。
-        if: always()
-        run: docker compose --env-file .env.example -f deploy/compose.yaml down --volumes
+        run: task ci:migration
       - name: 验证容器健康检查、API 代理和 SPA 回退
-        run: |
-          set -eu
-          # Sprint 1 后 API 依赖 MySQL 与迁移；复用 Compose 才能覆盖真实服务发现和启动顺序。
-          docker compose --env-file .env.example -f deploy/compose.yaml up -d mysql --wait
-          docker compose --env-file .env.example -f deploy/compose.yaml \
-            run --rm --no-deps --entrypoint /app/migrate api up
-          docker compose --env-file .env.example -f deploy/compose.yaml \
-            up -d api web --wait --wait-timeout 60
-
-          # 第一条请求验证 Nginx → Go API 代理，第二条验证 React SPA 未知路由回退。
-          curl --fail --silent http://127.0.0.1:8080/api/health | grep --fixed-strings '"status":"ok"'
-          curl --fail --silent http://127.0.0.1:8080/not-a-real-page | grep --fixed-strings '<div id="root"></div>'
-      - name: 清理冒烟测试容器
-        # always() 保证失败路径也执行，并删除隔离卷以免 Runner 保留测试数据。
-        if: always()
-        run: docker compose --env-file .env.example -f deploy/compose.yaml down --volumes
+        run: task ci:smoke

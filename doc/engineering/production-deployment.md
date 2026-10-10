@@ -148,7 +148,7 @@ MEDIA_TEST_COS_SECRET_KEY=<测试身份 SecretKey>
 ```
 
 ```bash
-make test-media-cos
+task test-media-cos
 ```
 
 测试会在 `media/integration/` 下生成不可预测对象键，经 HTTPS 回读并核对 SHA-256，最后删除测试对象。测试缺少任一变量、回读不是 HTTPS 200、字节变化或清理失败时都会失败。
