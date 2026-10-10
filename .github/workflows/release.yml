@@ -69,7 +69,8 @@ jobs:
     name: 部署到腾讯云生产环境
     needs: publish
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 生产机跨境拉取 GHCR 镜像可能超过 10 分钟，保留有界的部署窗口。
+    timeout-minutes: 60
     permissions:
       contents: read
     environment:
