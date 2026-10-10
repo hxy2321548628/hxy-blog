@@ -28,6 +28,8 @@
 
 公开页由 `App.tsx` 的 `public-app` 容器承载，`public.css` 只覆盖该容器内的瑞士风格令牌与布局；管理端继续使用 `styles.css` 的原有样式。`PostListPage` 保留 URL 分类和分页参数，`PostDetail` 让标题横跨阅读网格、把大纲置于正文前以适应手机阅读顺序。背景音乐仍由 `App` 在公开路由挂载，列表和详情切换不会重建播放器。
 
+主题在 `index.html` 中先按本地选择或系统偏好设置到根节点，避免首屏闪烁；`ThemeProvider` 随后监听系统偏好，并把手动选择保存到浏览器本地。`styles.css` 定义管理端和通用暗色令牌，`public.css` 为公开页单独覆盖黑白红色系；文章里的 Mermaid 图表在主题变化时重新渲染。
+
 管理员登录从 `cmd/admin` 的一次性建号开始，密码只保存 Argon2id 哈希。浏览器登录后将 10 分钟 Access Token 仅保存在 Redux 内存中，7 天 Refresh Token 则由服务端写入 HttpOnly、SameSite=Strict Cookie。页面重载和 Access Token 过期时共用同一个刷新协调器；并发请求只轮换一次 Refresh Token，重放检测会在服务端撤销整个令牌家族。`/admin` 在前端提供登录状态引导，真正的数据写入权限仍必须由后端 Bearer Token 校验。
 
 文章后台通过 `/api/admin/posts` 读写草稿，所有路由先验证 Access JWT。草稿允许正文为空，方便分步保存；发布动作则使用带状态和非空正文条件的原子更新，只有 `draft` 能转为 `published`。发布后文章不可再编辑，公开列表和详情缓存会同时失效。后台编辑器与访客详情共用经过清洗的 Markdown 渲染组件，避免预览和正式页面采用不同安全规则。
