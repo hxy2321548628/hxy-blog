@@ -115,3 +115,13 @@ Sprint 目标：在 ICP 备案通过后启用公网 HTTPS 入口，让访客可�
 3. [x] 公网自检脚本覆盖 DNS、跳转、证书、健康接口、SPA 回退与安全响应头。
 
 生产入口已于 2026-10-19 启用，`task edge:check` 11 项全部通过；管理员登录与图片上传仍需人工验收。范围、非目标、风险、上线步骤与回滚方式见 [`Sprint 9 开发计划`](../engineering/sprint-9-plan.md)。
+
+## Sprint 10：媒体稳定域名切换
+
+Sprint 目标：让上传图片生成 `https://media.hxy2333.site/...` 的稳定地址，该域名具备自动续期的有效 HTTPS，并清理历史文章中的 COS 默认域名。
+
+1. [ ] 修正 `MEDIA_PUBLIC_BASE_URL`，上传响应与编辑器插入统一使用媒体域名。
+2. [ ] `media.hxy2333.site` 由宿主机 Nginx 反代 COS，证书独立签发并自动续期，入口只允许读取。
+3. [ ] 回填历史文章中的 COS 默认域名，并提供公网自检、离线渲染测试与回滚脚本。
+
+背景、决策、风险、上线与回滚步骤见 [`Sprint 10 开发计划`](../engineering/sprint-10-plan.md)。
