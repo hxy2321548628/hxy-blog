@@ -1,7 +1,7 @@
 # Sprint 9 开发计划
 
 - 日期：2026-10-19
-- 状态：本地实现完成，待服务器执行与人工验收
+- 状态：生产公网入口已启用；管理员登录与图片上传待人工验收
 - Sprint 目标：在 ICP 备案通过后启用公网 HTTPS 入口，让访客可通过 `https://hxy2333.site` 访问博客，管理员可在 HTTPS 下登录。
 
 ## 背景
@@ -73,7 +73,7 @@
 
 1. 更新 Backlog 与本计划，确认范围。
 2. 先写离线测试 `deploy/scripts/test-edge-config.sh` 并确认它对缺失实现失败。
-3. 新增 `deploy/edge/hxy-blog.conf.tmpl` 与 `deploy/scripts/install-edge.sh`，让离线测试通过。
+3. 新增 `deploy/scripts/install-edge.sh`（内嵌 HTTP/TLS 两阶段 Nginx 模板），让离线测试通过。
 4. 新增 `deploy/scripts/check-public-entry.sh`，接入 `task edge:check`。
 5. 在 Taskfile 中接入 `edge:config`、`edge:check`，并把新脚本纳入 `check-deploy`。
 6. 更新 `doc/engineering/production-deployment.md` 与 `doc/engineering/code-reading-guide.md`。
@@ -120,3 +120,13 @@ sudo nginx -t && sudo systemctl reload nginx
 - `task check`：通过；Go 全部包测试、React 12 个测试文件共 28 个测试、ESLint、生产构建、Compose 配置校验和部署脚本语法检查均成功。
 - `task edge:check`：当前按预期报 9 项失败，因为 80/443 尚未在服务器启用；该结果同时验证了脚本在入口未开放时返回非零状态。
 - 未验证项：真实 Let's Encrypt 签发、`nginx -t` 在服务器上的结果、腾讯云防火墙放行、后台登录与图片上传。以上需要在合并后按上线步骤执行并人工确认。
+
+生产验收（2026-10-19）：
+
+- 服务器 Ubuntu 24.04 上安装 Nginx 1.24.0 与 Certbot 2.9.0；应用仍由 `127.0.0.1:8080` 提供，未改动容器端口绑定。
+- Let's Encrypt 证书签发成功，覆盖 `hxy2333.site` 与 `www.hxy2333.site`，有效期至 2027-01-17；首次签发因 CA 二次校验超时失败，原样重试后成功。
+- `certbot renew --dry-run --no-random-sleep-on-renew` 成功，续期配置包含 `renew_hook = systemctl reload nginx`，`certbot.timer` 已启用。
+- `task edge:check -- --expect-ip 146.56.243.24` 共 11 项全部通过；另有 4 个境外节点（保加利亚、西班牙、印度、乌克兰）访问 `https://hxy2333.site/` 均返回 200。
+- 80/443 实测公网可达，腾讯云控制台防火墙未做额外改动；HTTP 301、`www` 301、SPA 回退、安全响应头和 API 健康检查均符合预期。
+- `/etc/hxy-blog/runtime.env` 的 `AUTH_ALLOWED_ORIGINS` 已追加 `https://hxy2333.site`（备份保留在 `/var/backups/hxy-blog/edge/`），`api` 容器重建后健康。
+- 待人工验收：浏览器管理员登录、文章编辑与图片上传；这些依赖真实凭据，未在自动化中执行。
