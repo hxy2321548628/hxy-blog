@@ -107,7 +107,7 @@ run_sql() {
     --env-file "$RELEASE_ENV" \
     --file "$COMPOSE_FILE" \
     exec -T mysql \
-    sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' <"$1"
+    sh -c 'exec env MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE"' <"$1"
 }
 
 cat >"$sql_file" <<SQL

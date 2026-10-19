@@ -509,14 +509,21 @@ verify_local() {
 
   # 媒体根路径通常返回 COS 的 404；这里只要求 TLS 校验通过且反代可达，
   # 具体对象的可用性由 check-media-entry.sh 用真实 key 验证。
+  # 与主站一样，reload 后新监听端口需要短暂时间生效；失败时重试而不是立即回滚。
   local media_code
-  media_code=$(curl --noproxy '*' --silent --show-error --max-time 10 \
-    --resolve "${MEDIA_DOMAIN}:443:127.0.0.1" \
-    --output /dev/null --write-out '%{http_code}' \
-    "https://${MEDIA_DOMAIN}/" 2>/dev/null) || media_code=000
-  if [[ -z $media_code || $media_code == 000 ]]; then
-    die "媒体域名 HTTPS 校验失败：${MEDIA_DOMAIN}"
-  fi
+  for attempt in $(seq 1 10); do
+    media_code=$(curl --noproxy '*' --silent --show-error --max-time 10 \
+      --resolve "${MEDIA_DOMAIN}:443:127.0.0.1" \
+      --output /dev/null --write-out '%{http_code}' \
+      "https://${MEDIA_DOMAIN}/" 2>/dev/null) || media_code=000
+    if [[ -n $media_code && $media_code != 000 ]]; then
+      break
+    fi
+    if ((attempt == 10)); then
+      die "媒体域名 HTTPS 校验失败：${MEDIA_DOMAIN}"
+    fi
+    sleep 1
+  done
   log '本机校验通过'
 }
 
