@@ -66,7 +66,7 @@ Environment 只允许受保护的 `main` 分支部署，并要求人工批准。
 | 项目 | 约定 |
 | --- | --- |
 | 站点配置 | `/etc/nginx/conf.d/hxy-blog.conf`，由脚本整体渲染，不手工修改 |
-| 配置模板 | `deploy/edge/hxy-blog-http.conf.tmpl`、`deploy/edge/hxy-blog-tls.conf.tmpl` |
+| 配置模板 | 内嵌在 `install-edge.sh` 中，安装时只分发单个 root 拥有的脚本 |
 | 安装脚本 | `deploy/scripts/install-edge.sh`，只在服务器上以 root 手工执行 |
 | 公网自检 | `deploy/scripts/check-public-entry.sh`，在任意机器执行并绕过本机代理 |
 | 证书目录 | `/etc/letsencrypt/live/hxy2333.site/` |
@@ -84,11 +84,15 @@ Environment 只允许受保护的 `main` 分支部署，并要求人工批准。
    ```
 
 2. 在腾讯云轻量应用服务器控制台的防火墙放行 TCP 80 和 443。只在系统 `ufw`/`iptables` 放行不会生效。
-3. 在服务器执行安装脚本。脚本先写只含 80 的配置完成 ACME 校验，再切换为 HTTPS 配置：
+3. 把安装脚本分发到服务器的固定入口，再以 root 执行。脚本先写只含 80 的配置完成 ACME 校验，再切换为 HTTPS 配置：
 
    ```bash
-   sudo ./deploy/scripts/install-edge.sh --email <证书通知邮箱>
+   scp deploy/scripts/install-edge.sh tencent:/tmp/install-edge.sh
+   ssh tencent 'sudo install -o root -g root -m 755 /tmp/install-edge.sh /usr/local/sbin/hxy-blog-install-edge'
+   ssh tencent 'sudo /usr/local/sbin/hxy-blog-install-edge --email <证书通知邮箱>'
    ```
+
+   脚本是幂等的：证书已存在时直接应用 HTTPS 配置，`nginx -t` 失败时自动恢复上一份配置。
 
 4. 在开发机执行公网自检，直到全部通过：
 
@@ -114,8 +118,10 @@ Environment 只允许受保护的 `main` 分支部署，并要求人工批准。
 
 ```bash
 systemctl list-timers 'certbot*'
-sudo certbot renew --dry-run
+sudo certbot renew --dry-run --no-random-sleep-on-renew
 ```
+
+`renew` 默认会加入最多 8 分钟的随机延迟用于错峰，人工演练时加上 `--no-random-sleep-on-renew` 可以立即执行。
 
 ### 回滚
 

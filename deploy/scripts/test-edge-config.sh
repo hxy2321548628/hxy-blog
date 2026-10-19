@@ -7,9 +7,6 @@ set -Eeuo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly INSTALL="${SCRIPT_DIR}/install-edge.sh"
-readonly HTTP_TEMPLATE="${SCRIPT_DIR}/../edge/hxy-blog-http.conf.tmpl"
-readonly TLS_TEMPLATE="${SCRIPT_DIR}/../edge/hxy-blog-tls.conf.tmpl"
-
 failures=0
 checks=0
 
@@ -58,14 +55,6 @@ assert_exit() {
 
 if [[ ! -f ${INSTALL} ]]; then
   printf '缺少 %s\n' "${INSTALL}" >&2
-  exit 1
-fi
-if [[ ! -f ${HTTP_TEMPLATE} ]]; then
-  printf '缺少 %s\n' "${HTTP_TEMPLATE}" >&2
-  exit 1
-fi
-if [[ ! -f ${TLS_TEMPLATE} ]]; then
-  printf '缺少 %s\n' "${TLS_TEMPLATE}" >&2
   exit 1
 fi
 

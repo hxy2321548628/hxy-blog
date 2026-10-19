@@ -9,9 +9,6 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly HTTP_TEMPLATE="${SCRIPT_DIR}/../edge/hxy-blog-http.conf.tmpl"
-readonly TLS_TEMPLATE="${SCRIPT_DIR}/../edge/hxy-blog-tls.conf.tmpl"
-
 # 这些路径与运行手册绑定；改名会破坏续期、备份和回滚说明，必须同步文档。
 readonly NGINX_CONF="/etc/nginx/conf.d/hxy-blog.conf"
 readonly ACME_ROOT="/var/www/certbot"
@@ -161,6 +158,114 @@ detect_http2_mode() {
   printf 'legacy\n'
 }
 
+# 公网入口配置内嵌在脚本里：安装时只需要一个 root 拥有的文件，
+# 不依赖服务器上是否存在仓库检出目录，也避免模板与脚本版本错配。
+http_template() {
+  cat <<'NGINX_TEMPLATE'
+# 由 deploy/scripts/install-edge.sh 渲染，请勿手工修改。
+#
+# 第一阶段配置：证书可能尚不存在，因此这里只开放 80，提供 ACME 校验目录，
+# 并把其余请求跳转到 HTTPS。任何 ssl_* 指令出现在这里都会让 Nginx 启动失败。
+
+server {
+    listen 80;
+    server_name __PRIMARY_DOMAIN__ __WWW_DOMAIN__;
+
+    # Certbot HTTP-01 校验必须能从公网读到这个目录；它优先于下面的跳转规则。
+    location ^~ /.well-known/acme-challenge/ {
+        root __ACME_ROOT__;
+        default_type text/plain;
+    }
+
+    # 其余请求统一跳到规范域名，避免 www 与主域名各自维护内容。
+    location / {
+        return 301 https://__PRIMARY_DOMAIN__$request_uri;
+    }
+}
+NGINX_TEMPLATE
+}
+
+tls_template() {
+  cat <<'NGINX_TEMPLATE'
+# 由 deploy/scripts/install-edge.sh 渲染，请勿手工修改。
+#
+# 第二阶段配置：宿主机 Nginx 终结 TLS，把请求原样转给回环地址上的容器栈。
+# 应用容器仍然只绑定 127.0.0.1:8080，公网可达性完全由这份配置控制；
+# 删除本文件并 reload 即可回到只能通过 SSH 隧道访问的状态。
+
+server {
+    listen 80;
+    server_name __PRIMARY_DOMAIN__ __WWW_DOMAIN__;
+
+    # 保留 ACME 目录，证书续期时不需要再次改动配置。
+    location ^~ /.well-known/acme-challenge/ {
+        root __ACME_ROOT__;
+        default_type text/plain;
+    }
+
+    location / {
+        return 301 https://__PRIMARY_DOMAIN__$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl__HTTP2_PARAM__;
+    __HTTP2_DIRECTIVE__
+    server_name __PRIMARY_DOMAIN__;
+
+    ssl_certificate __CERT_BASE__/fullchain.pem;
+    ssl_certificate_key __CERT_BASE__/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    # 共享会话缓存减少重复握手；单机博客不需要更大的缓存区。
+    ssl_session_cache shared:hxy_blog_tls:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # 隐藏版本号，减少针对具体 Nginx 版本的探测。
+    server_tokens off;
+    # 1 年 HSTS 但不包含子域：media 等子域由腾讯云 COS 独立提供，避免被一起锁定。
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # 容器内 Nginx 的上传上限是 11 MiB；外层必须不小于该值，否则先被 413 拒绝。
+    client_max_body_size 11m;
+
+    location / {
+        proxy_pass http://__UPSTREAM__;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # 必须传递真实协议：后台来源校验与 Secure Cookie 都依赖它。
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # 上传接近上限时直传请求体，避免先写满宿主机磁盘。
+        proxy_request_buffering off;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}
+
+server {
+    listen 443 ssl__HTTP2_PARAM__;
+    __HTTP2_DIRECTIVE__
+    server_name __WWW_DOMAIN__;
+
+    ssl_certificate __CERT_BASE__/fullchain.pem;
+    ssl_certificate_key __CERT_BASE__/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:hxy_blog_tls:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+    server_tokens off;
+
+    # www 只作为别名存在，保留路径与查询串跳转到规范域名。
+    return 301 https://__PRIMARY_DOMAIN__$request_uri;
+}
+NGINX_TEMPLATE
+}
+
 render_config() {
   local stage=$1 mode http2_param='' http2_directive='' template
 
@@ -172,11 +277,10 @@ render_config() {
   fi
 
   case "$stage" in
-    http) template=$HTTP_TEMPLATE ;;
-    tls) template=$TLS_TEMPLATE ;;
+    http) template=$(http_template) ;;
+    tls) template=$(tls_template) ;;
     *) die "未知的配置阶段：${stage}" ;;
   esac
-  [[ -f $template ]] || die "缺少模板：${template}"
 
   # 只替换受校验的占位符；模板里的 $host、$request_uri 等 Nginx 变量保持原样。
   sed \
@@ -187,7 +291,7 @@ render_config() {
     -e "s|__CERT_BASE__|${CERT_ROOT}/${PRIMARY_DOMAIN}|g" \
     -e "s|__HTTP2_PARAM__|${http2_param}|g" \
     -e "s|__HTTP2_DIRECTIVE__|${http2_directive}|g" \
-    "$template"
+    <<<"$template"
 }
 
 require_root() {
@@ -300,10 +404,20 @@ issue_certificate() {
 
 verify_local() {
   log '验证本机 HTTPS 入口'
-  curl --noproxy '*' --fail --silent --show-error --max-time 10 \
-    --resolve "${PRIMARY_DOMAIN}:443:127.0.0.1" \
-    "https://${PRIMARY_DOMAIN}/healthz" >/dev/null ||
-    die '本机 HTTPS 健康检查失败'
+  # reload 返回时旧 worker 可能仍在收尾，新监听端口需要短暂时间生效；
+  # 因此这里重试而不是一次失败就回滚。
+  local attempt
+  for attempt in $(seq 1 10); do
+    if curl --noproxy '*' --fail --silent --max-time 5 \
+      --resolve "${PRIMARY_DOMAIN}:443:127.0.0.1" \
+      "https://${PRIMARY_DOMAIN}/healthz" >/dev/null 2>&1; then
+      break
+    fi
+    if ((attempt == 10)); then
+      die '本机 HTTPS 健康检查失败'
+    fi
+    sleep 1
+  done
 
   curl --noproxy '*' --fail --silent --show-error --max-time 10 \
     --resolve "${PRIMARY_DOMAIN}:443:127.0.0.1" \
@@ -343,7 +457,7 @@ print_summary() {
      task edge:check -- --expect-ip <服务器公网 IP>
   3. 确认续期任务存在：
      systemctl list-timers 'certbot*'
-     certbot renew --dry-run
+     certbot renew --dry-run --no-random-sleep-on-renew
 
 证书续期后由 deploy hook 自动 reload Nginx。
 回滚：sudo rm -f ${NGINX_CONF} && sudo nginx -t && sudo systemctl reload nginx
