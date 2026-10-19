@@ -66,11 +66,23 @@ tasks:
     desc: 检查部署脚本、备份文件名和 CAM JSON
     cmds:
       # 只解析脚本和策略，不连接生产服务器或读取生产配置。
-      - bash -n deploy/scripts/deploy.sh deploy/scripts/ssh-entry.sh deploy/scripts/backup-db.sh deploy/scripts/restore-drill.sh deploy/scripts/install-coscli.sh deploy/scripts/configure-coscli.sh deploy/scripts/sync-backup-cos.sh deploy/scripts/fetch-backup-cos.sh deploy/scripts/backup-current-db.sh deploy/scripts/ci-migration.sh deploy/scripts/ci-smoke.sh deploy/scripts/publish-images.sh deploy/scripts/deploy-production.sh
+      - bash -n deploy/scripts/deploy.sh deploy/scripts/ssh-entry.sh deploy/scripts/backup-db.sh deploy/scripts/restore-drill.sh deploy/scripts/install-coscli.sh deploy/scripts/configure-coscli.sh deploy/scripts/sync-backup-cos.sh deploy/scripts/fetch-backup-cos.sh deploy/scripts/backup-current-db.sh deploy/scripts/ci-migration.sh deploy/scripts/ci-smoke.sh deploy/scripts/publish-images.sh deploy/scripts/deploy-production.sh deploy/scripts/install-edge.sh deploy/scripts/check-public-entry.sh deploy/scripts/test-edge-config.sh
       - bash -c '[[ "20260930T032152Z-sha-8aa51a66049e.sql.gz" =~ ^[0-9]{8}T[0-9]{6}([0-9]{9})?Z-sha-[0-9a-f]{12}\.sql\.gz$ ]]'
       - bash -c '[[ "20260930T032152643485203Z-sha-8aa51a66049e.sql.gz" =~ ^[0-9]{8}T[0-9]{6}([0-9]{9})?Z-sha-[0-9a-f]{12}\.sql\.gz$ ]]'
       - python3 -m json.tool deploy/cam/cos-backup-policy.json > /dev/null
       - python3 -m json.tool deploy/cam/cos-media-policy.json > /dev/null
+      # 公网入口配置只做离线渲染断言，不需要 root、Nginx 或网络。
+      - bash deploy/scripts/test-edge-config.sh
+
+  edge:config:
+    desc: 离线渲染并校验公网 HTTPS 入口配置
+    cmds:
+      - bash deploy/scripts/test-edge-config.sh
+
+  edge:check:
+    desc: 检查公网 HTTPS 入口，默认绕过本机代理
+    cmds:
+      - bash deploy/scripts/check-public-entry.sh {{.CLI_ARGS}}
 
   container-config:
     desc: 验证开发 Compose 配置
@@ -131,7 +143,7 @@ tasks:
   release:deploy:
     desc: 使用显式环境、提交和两个 Digest 调用服务器固定部署入口
     cmds:
-      - bash deploy/scripts/deploy-production.sh
+      - bash deploy/scripts/deploy-production.sh deploy/scripts/install-edge.sh deploy/scripts/check-public-entry.sh deploy/scripts/test-edge-config.sh
 
   container-up:
     desc: 构建并启动本地容器栈，先完成迁移
