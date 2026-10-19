@@ -73,6 +73,8 @@ Environment 只允许受保护的 `main` 分支部署，并要求人工批准。
 | ACME webroot | `/var/www/certbot` |
 | 配置备份 | `/var/backups/hxy-blog/edge/`，root:root `0700` |
 | 规范域名 | `hxy2333.site`；`www` 永久 301 到主域名 |
+| 媒体站点 | `media.hxy2333.site`，只读反代到 COS 默认域名 |
+| 媒体证书 | `/etc/letsencrypt/live/media.hxy2333.site/`，独立续期 |
 
 ### 首次启用
 
@@ -84,7 +86,7 @@ Environment 只允许受保护的 `main` 分支部署，并要求人工批准。
    ```
 
 2. 在腾讯云轻量应用服务器控制台的防火墙放行 TCP 80 和 443。只在系统 `ufw`/`iptables` 放行不会生效。
-3. 把安装脚本分发到服务器的固定入口，再以 root 执行。脚本先写只含 80 的配置完成 ACME 校验，再切换为 HTTPS 配置：
+3. 把安装脚本分发到服务器的固定入口，再以 root 执行。脚本先写只含 80 的配置完成 ACME 校验，再切换为 HTTPS 配置；首次执行还会为 `media.hxy2333.site` 签发独立证书，因此执行前要先把该域名解析到本机（见下文「媒体域名」），否则脚本会在签发阶段停止，但主站 HTTPS 不会被降级：
 
    ```bash
    scp deploy/scripts/install-edge.sh tencent:/tmp/install-edge.sh
@@ -114,7 +116,7 @@ Environment 只允许受保护的 `main` 分支部署，并要求人工批准。
 
 ### 证书续期
 
-`certbot` 由系统 timer 自动续期，续期成功后通过 `--deploy-hook 'systemctl reload nginx'` 让新证书生效。
+主站和媒体域名各有一张证书，都由系统 timer 自动续期；续期成功后通过 `--deploy-hook 'systemctl reload nginx'` 让新证书生效。
 
 ```bash
 systemctl list-timers 'certbot*'
@@ -122,6 +124,47 @@ sudo certbot renew --dry-run --no-random-sleep-on-renew
 ```
 
 `renew` 默认会加入最多 8 分钟的随机延迟用于错峰，人工演练时加上 `--no-random-sleep-on-renew` 可以立即执行。
+
+### 媒体域名 media.hxy2333.site
+
+媒体域名不直接解析到 COS，而是指向博客服务器，由宿主机 Nginx 只读反代到桶的默认域名。这样证书与主站共用同一套 certbot 自动续期，不需要每 90 天手工申请并绑定腾讯云免费证书。
+
+1. 在 DNSPod 把 `media.hxy2333.site` 的 CNAME 改为 A 记录 `<服务器公网 IP>`，确认解析：
+
+   ```bash
+   dig +short media.hxy2333.site
+   ```
+
+2. 重新执行安装脚本，脚本会为媒体域名单独签发证书并启用只读反代：
+
+   ```bash
+   ssh tencent 'sudo /usr/local/sbin/hxy-blog-install-edge'
+   ```
+
+3. 在开发机验证媒体入口与真实对象：
+
+   ```bash
+   task media:check -- --object media/2026/10/<key>.png
+   ```
+
+4. 先回填历史文章，再切换环境变量并重启 API。顺序不能反，否则公开文章的进程内缓存会继续返回 COS 地址：
+
+   ```bash
+   scp deploy/scripts/rewrite-media-urls.sh tencent:/tmp/rewrite-media-urls.sh
+   ssh tencent 'sudo install -o root -g root -m 755 /tmp/rewrite-media-urls.sh /usr/local/sbin/hxy-blog-media-rewrite'
+   ssh tencent 'sudo /usr/local/sbin/hxy-blog-media-rewrite'          # 试运行
+   ssh tencent 'sudo /usr/local/sbin/hxy-blog-media-rewrite --apply'  # 写入
+   ```
+
+   然后把 `runtime.env` 的 `MEDIA_PUBLIC_BASE_URL` 改为 `https://media.hxy2333.site`，并重建 `api`：
+
+   ```bash
+   ssh tencent 'sudo docker compose --project-name hxy-blog-production --env-file /etc/hxy-blog/runtime.env --env-file /opt/hxy-blog/release.env --file /opt/hxy-blog/compose.yaml up -d --no-build --force-recreate --wait api'
+   ```
+
+5. 在后台重新上传一张图片，确认插入的 Markdown 以 `https://media.hxy2333.site/` 开头。
+
+媒体域名的回滚与应用回滚相互独立：把 `MEDIA_PUBLIC_BASE_URL` 改回 COS 默认域名、用 `rewrite-media-urls.sh --apply --from https://media.hxy2333.site --to <COS 默认域名>` 反向回填，再把 DNS 改回指向桶即可。media 站点块与主站块互不影响，媒体入口异常不会影响主站 443。
 
 ### 回滚
 
@@ -205,7 +248,7 @@ sudo /usr/local/sbin/hxy-blog-db-restore-drill \
 1. 在 `ap-nanjing` 创建标准存储桶 `hxy-blog-media-1497610660`，公开读取、私有写入，关闭版本控制。
 2. `media/` 正式对象不设置自动过期；生命周期规则在 1 天后终止未完成的分片上传，并在 7 天后删除 `tmp/` 对象。
 3. 用 [`deploy/cam/cos-media-policy.json`](../../deploy/cam/cos-media-policy.json) 创建 `HxyBlogMediaPolicy`，只关联到专用编程访问子用户 `hxy-blog-media`。
-4. 在完成 ICP 备案和 TLS 配置后，将 `media.hxy2333.site` 绑定到媒体桶；应用正文只使用该稳定域名，不保存 COS 默认域名。
+4. `media.hxy2333.site` 使用 A 记录指向博客服务器，由宿主机 Nginx 只读反代到 COS 默认域名（见「媒体域名」一节）；应用正文只使用该稳定域名，不保存 COS 默认域名。
 5. 将以下四项写入服务器 `/etc/hxy-blog/runtime.env`，不得写入 GitHub、聊天、Shell 历史或命令行参数：
 
 ```dotenv
@@ -214,6 +257,8 @@ MEDIA_PUBLIC_BASE_URL=https://media.hxy2333.site
 MEDIA_COS_SECRET_ID=<媒体专用 CAM SecretId>
 MEDIA_COS_SECRET_KEY=<媒体专用 CAM SecretKey>
 ```
+
+修改 `MEDIA_PUBLIC_BASE_URL` 后需要重建 `api` 容器才会生效；历史文章中已写入的 COS 地址用 `rewrite-media-urls.sh` 回填。
 
 ### 隔离桶集成测试
 

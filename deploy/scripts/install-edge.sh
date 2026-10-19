@@ -18,6 +18,9 @@ readonly RUNTIME_ENV="/etc/hxy-blog/runtime.env"
 
 PRIMARY_DOMAIN="hxy2333.site"
 WWW_DOMAIN="www.hxy2333.site"
+MEDIA_DOMAIN="media.hxy2333.site"
+# 媒体桶的默认域名；反代时同时作为 Host 和 SNI，不能改成自定义域名。
+MEDIA_BUCKET="hxy-blog-media-1497610660.cos.ap-nanjing.myqcloud.com"
 UPSTREAM="127.0.0.1:8080"
 EMAIL=""
 HTTP2="auto"
@@ -49,6 +52,8 @@ usage() {
 选项：
   --domain <域名>        主域名，默认 hxy2333.site
   --www <域名>           www 别名，默认 www.<主域名>
+  --media-domain <域名>  媒体域名，默认 media.<主域名>
+  --media-bucket <域名>  媒体桶默认域名，默认 hxy-blog-media-1497610660.cos.ap-nanjing.myqcloud.com
   --upstream <host:port> 应用上游，默认 127.0.0.1:8080
   --email <邮箱>         首次签发证书的通知邮箱
   --http2 <auto|modern|legacy>  Nginx 版本适配，默认 auto
@@ -72,6 +77,16 @@ parse_args() {
       --www)
         [[ $# -ge 2 ]] || usage_die '--www 缺少参数'
         WWW_DOMAIN=$2
+        shift 2
+        ;;
+      --media-domain)
+        [[ $# -ge 2 ]] || usage_die '--media-domain 缺少参数'
+        MEDIA_DOMAIN=$2
+        shift 2
+        ;;
+      --media-bucket)
+        [[ $# -ge 2 ]] || usage_die '--media-bucket 缺少参数'
+        MEDIA_BUCKET=$2
         shift 2
         ;;
       --upstream)
@@ -111,6 +126,8 @@ parse_args() {
 
   validate_domain "$PRIMARY_DOMAIN" || usage_die "主域名格式无效：${PRIMARY_DOMAIN}"
   validate_domain "$WWW_DOMAIN" || usage_die "www 域名格式无效：${WWW_DOMAIN}"
+  validate_domain "$MEDIA_DOMAIN" || usage_die "媒体域名格式无效：${MEDIA_DOMAIN}"
+  validate_domain "$MEDIA_BUCKET" || usage_die "媒体桶域名格式无效：${MEDIA_BUCKET}"
   validate_upstream "$UPSTREAM" || usage_die "上游地址必须是 host:port：${UPSTREAM}"
 
   case "$HTTP2" in
@@ -160,12 +177,15 @@ detect_http2_mode() {
 
 # 公网入口配置内嵌在脚本里：安装时只需要一个 root 拥有的文件，
 # 不依赖服务器上是否存在仓库检出目录，也避免模板与脚本版本错配。
-http_template() {
+#
+# 80 端口块由主站和媒体域名共用，单独抽出后，
+# “只渲染 HTTP”和“渲染 TLS”两种阶段会看到完全一致的 ACME 入口。
+http_server_blocks() {
   cat <<'NGINX_TEMPLATE'
 # 由 deploy/scripts/install-edge.sh 渲染，请勿手工修改。
 #
-# 第一阶段配置：证书可能尚不存在，因此这里只开放 80，提供 ACME 校验目录，
-# 并把其余请求跳转到 HTTPS。任何 ssl_* 指令出现在这里都会让 Nginx 启动失败。
+# 80 端口只做两件事：提供 ACME 校验目录，把其他请求跳转到 HTTPS。
+# 这里不能出现任何 ssl_* 指令：首次安装时证书还不存在。
 
 server {
     listen 80;
@@ -182,32 +202,27 @@ server {
         return 301 https://__PRIMARY_DOMAIN__$request_uri;
     }
 }
-NGINX_TEMPLATE
-}
-
-tls_template() {
-  cat <<'NGINX_TEMPLATE'
-# 由 deploy/scripts/install-edge.sh 渲染，请勿手工修改。
-#
-# 第二阶段配置：宿主机 Nginx 终结 TLS，把请求原样转给回环地址上的容器栈。
-# 应用容器仍然只绑定 127.0.0.1:8080，公网可达性完全由这份配置控制；
-# 删除本文件并 reload 即可回到只能通过 SSH 隧道访问的状态。
 
 server {
     listen 80;
-    server_name __PRIMARY_DOMAIN__ __WWW_DOMAIN__;
+    server_name __MEDIA_DOMAIN__;
 
-    # 保留 ACME 目录，证书续期时不需要再次改动配置。
+    # 媒体域名使用独立证书，ACME 校验同样落在宿主机上。
     location ^~ /.well-known/acme-challenge/ {
         root __ACME_ROOT__;
         default_type text/plain;
     }
 
     location / {
-        return 301 https://__PRIMARY_DOMAIN__$request_uri;
+        return 301 https://__MEDIA_DOMAIN__$request_uri;
     }
 }
+NGINX_TEMPLATE
+}
 
+# 主站 443 与 www 跳转块；行为与 Sprint 9 保持一致。
+primary_tls_blocks() {
+  cat <<'NGINX_TEMPLATE'
 server {
     listen 443 ssl__HTTP2_PARAM__;
     __HTTP2_DIRECTIVE__
@@ -223,7 +238,7 @@ server {
 
     # 隐藏版本号，减少针对具体 Nginx 版本的探测。
     server_tokens off;
-    # 1 年 HSTS 但不包含子域：media 等子域由腾讯云 COS 独立提供，避免被一起锁定。
+    # 1 年 HSTS 但不包含子域：media 使用独立证书，避免被子域策略锁定。
     add_header Strict-Transport-Security "max-age=31536000" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
@@ -266,8 +281,48 @@ server {
 NGINX_TEMPLATE
 }
 
+# 媒体域名 443：只读反代到 COS 默认域名。
+# COS 要求 Host 必须等于桶域名，因此不能透传 $host；
+# 入口只允许 GET/HEAD，避免它被当成任意对象写通道。
+media_tls_block() {
+  cat <<'NGINX_TEMPLATE'
+server {
+    listen 443 ssl__HTTP2_PARAM__;
+    __HTTP2_DIRECTIVE__
+    server_name __MEDIA_DOMAIN__;
+
+    ssl_certificate __MEDIA_CERT_BASE__/fullchain.pem;
+    ssl_certificate_key __MEDIA_CERT_BASE__/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:hxy_blog_tls:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+    server_tokens off;
+    add_header X-Content-Type-Options "nosniff" always;
+
+    location / {
+        # 图片只需要读取；拒绝其他方法可以防止入口被用来写对象或探测 API。
+        limit_except GET HEAD {
+            deny all;
+        }
+
+        proxy_pass https://__MEDIA_BUCKET__;
+        proxy_ssl_server_name on;
+        # COS 自定义域名回源必须使用桶域名作为 Host。
+        proxy_set_header Host __MEDIA_BUCKET__;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+    }
+}
+NGINX_TEMPLATE
+}
+
 render_config() {
-  local stage=$1 mode http2_param='' http2_directive='' template
+  local stage=$1 include_media_tls=${2:-1}
+  local mode http2_param='' http2_directive='' content=''
 
   mode=$(detect_http2_mode)
   if [[ $mode == modern ]]; then
@@ -277,8 +332,14 @@ render_config() {
   fi
 
   case "$stage" in
-    http) template=$(http_template) ;;
-    tls) template=$(tls_template) ;;
+    http) content=$(http_server_blocks) ;;
+    tls)
+      content="$(http_server_blocks)"$'\n\n'"$(primary_tls_blocks)"
+      # 媒体证书尚未签发时不渲染 443 块，主站 HTTPS 因此不会被中途降级。
+      if ((include_media_tls)); then
+        content+=$'\n\n'"$(media_tls_block)"
+      fi
+      ;;
     *) die "未知的配置阶段：${stage}" ;;
   esac
 
@@ -286,12 +347,15 @@ render_config() {
   sed \
     -e "s|__PRIMARY_DOMAIN__|${PRIMARY_DOMAIN}|g" \
     -e "s|__WWW_DOMAIN__|${WWW_DOMAIN}|g" \
+    -e "s|__MEDIA_DOMAIN__|${MEDIA_DOMAIN}|g" \
+    -e "s|__MEDIA_BUCKET__|${MEDIA_BUCKET}|g" \
     -e "s|__UPSTREAM__|${UPSTREAM}|g" \
     -e "s|__ACME_ROOT__|${ACME_ROOT}|g" \
     -e "s|__CERT_BASE__|${CERT_ROOT}/${PRIMARY_DOMAIN}|g" \
+    -e "s|__MEDIA_CERT_BASE__|${CERT_ROOT}/${MEDIA_DOMAIN}|g" \
     -e "s|__HTTP2_PARAM__|${http2_param}|g" \
     -e "s|__HTTP2_DIRECTIVE__|${http2_directive}|g" \
-    <<<"$template"
+    <<<"$content"
 }
 
 require_root() {
@@ -358,7 +422,7 @@ restore_previous_config() {
 write_config() {
   local stage=$1 rendered tmp
 
-  rendered=$(render_config "$stage")
+  rendered=$(render_config "$stage" "${2:-1}")
   # 部分发行版的 Nginx 没有 conf.d 目录，先创建再写入，避免首次安装失败。
   install -d -m 0755 "$(dirname "$NGINX_CONF")"
   tmp="${NGINX_CONF}.tmp.$$"
@@ -381,8 +445,13 @@ write_config() {
   log "已应用 ${stage} 阶段配置：${NGINX_CONF}"
 }
 
-issue_certificate() {
-  local cert="${CERT_ROOT}/${PRIMARY_DOMAIN}/fullchain.pem"
+# 为指定证书名签发一张覆盖所有域名的证书；已存在时直接复用。
+# 用独立的 --cert-name 可以让主站与媒体域名各自续期，互不影响。
+ensure_certificate() {
+  local cert_name=$1
+  shift
+  local cert="${CERT_ROOT}/${cert_name}/fullchain.pem"
+  local domains=("$@")
 
   if [[ -f $cert ]]; then
     log "证书已存在，跳过签发：${cert}"
@@ -390,16 +459,21 @@ issue_certificate() {
   fi
   [[ -n $EMAIL ]] || die '首次签发证书需要 --email 提供通知邮箱'
 
+  local args=()
+  local domain
+  for domain in "${domains[@]}"; do
+    args+=(-d "$domain")
+  done
+
   install -d -m 0755 "$ACME_ROOT"
-  log "申请 Let's Encrypt 证书：${PRIMARY_DOMAIN}、${WWW_DOMAIN}"
+  log "申请 Let's Encrypt 证书：${domains[*]}"
   # 只使用 certonly + webroot：让站点配置完全由本脚本渲染，
   # 避免 certbot 改写 Nginx 配置后在下次安装时被覆盖。
   certbot certonly --webroot --webroot-path "$ACME_ROOT" \
-    --cert-name "$PRIMARY_DOMAIN" \
-    -d "$PRIMARY_DOMAIN" -d "$WWW_DOMAIN" \
+    --cert-name "$cert_name" "${args[@]}" \
     --email "$EMAIL" --agree-tos --non-interactive \
     --deploy-hook 'systemctl reload nginx' ||
-    die '证书签发失败；确认腾讯云防火墙已放行 80，且域名解析指向本机'
+    die "证书签发失败：${domains[*]}；确认 80 端口已放行且域名解析指向本机"
 }
 
 verify_local() {
@@ -432,6 +506,24 @@ verify_local() {
     "http://${PRIMARY_DOMAIN}/")
   [[ $redirect == "301 https://${PRIMARY_DOMAIN}/" ]] ||
     die "HTTP 跳转不符合预期：${redirect}"
+
+  # 媒体根路径通常返回 COS 的 404；这里只要求 TLS 校验通过且反代可达，
+  # 具体对象的可用性由 check-media-entry.sh 用真实 key 验证。
+  # 与主站一样，reload 后新监听端口需要短暂时间生效；失败时重试而不是立即回滚。
+  local media_code
+  for attempt in $(seq 1 10); do
+    media_code=$(curl --noproxy '*' --silent --show-error --max-time 10 \
+      --resolve "${MEDIA_DOMAIN}:443:127.0.0.1" \
+      --output /dev/null --write-out '%{http_code}' \
+      "https://${MEDIA_DOMAIN}/" 2>/dev/null) || media_code=000
+    if [[ -n $media_code && $media_code != 000 ]]; then
+      break
+    fi
+    if ((attempt == 10)); then
+      die "媒体域名 HTTPS 校验失败：${MEDIA_DOMAIN}"
+    fi
+    sleep 1
+  done
   log '本机校验通过'
 }
 
@@ -448,6 +540,7 @@ print_summary() {
 
 公网入口已启用：https://${PRIMARY_DOMAIN}
   - www 别名：https://${WWW_DOMAIN} → 301 到主域名
+  - 媒体域名：https://${MEDIA_DOMAIN} → 只读反代 ${MEDIA_BUCKET}
   - 上游：http://${UPSTREAM}
 
 还需要人工完成：
@@ -455,6 +548,7 @@ print_summary() {
      只在系统 ufw/iptables 放行不会生效。
   2. 在开发机执行公网自检：
      task edge:check -- --expect-ip <服务器公网 IP>
+     task media:check -- --object <对象键>
   3. 确认续期任务存在：
      systemctl list-timers 'certbot*'
      certbot renew --dry-run --no-random-sleep-on-renew
@@ -480,14 +574,22 @@ main() {
   check_upstream
   install -d -m 0755 "$ACME_ROOT"
 
-  local cert="${CERT_ROOT}/${PRIMARY_DOMAIN}/fullchain.pem"
-  if [[ -f $cert ]]; then
-    log '检测到现有证书，直接应用 HTTPS 配置'
+  local primary_cert="${CERT_ROOT}/${PRIMARY_DOMAIN}/fullchain.pem"
+  local media_cert="${CERT_ROOT}/${MEDIA_DOMAIN}/fullchain.pem"
+
+  if [[ -f $primary_cert && -f $media_cert ]]; then
     write_config tls
   else
-    # 先写入只含 80 的配置，让 Certbot 能完成 HTTP-01 校验。
-    write_config http
-    issue_certificate
+    if [[ ! -f $primary_cert ]]; then
+      # 首次安装：先写入只含 80 的配置，让 Certbot 完成 HTTP-01 校验。
+      write_config http
+      ensure_certificate "$PRIMARY_DOMAIN" "$PRIMARY_DOMAIN" "$WWW_DOMAIN"
+    else
+      # 主站证书已存在时保持 HTTPS 现状，只补媒体域名的 80 入口，
+      # 这样媒体证书签发失败也不会把主站降级为 HTTP。
+      write_config tls 0
+    fi
+    ensure_certificate "$MEDIA_DOMAIN" "$MEDIA_DOMAIN"
     write_config tls
   fi
 

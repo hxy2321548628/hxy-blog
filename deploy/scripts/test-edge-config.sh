@@ -92,6 +92,15 @@ tls_legacy="$("${INSTALL}" --print-config tls --http2 legacy)"
 assert_contains '旧版 Nginx 使用 listen 参数启用 http2' 'listen 443 ssl http2;' "${tls_legacy}"
 assert_not_contains '旧版 Nginx 不重复使用 http2 指令' 'http2 on;' "${tls_legacy}"
 
+# ---- 媒体域名：独立证书与只读反代 ----
+assert_contains 'HTTP 为媒体域名提供 ACME' 'server_name media.hxy2333.site;' "${http_config}"
+assert_contains 'HTTP 把媒体域名跳转到 HTTPS' 'return 301 https://media.hxy2333.site$request_uri;' "${http_config}"
+assert_contains '媒体域名使用独立证书' 'ssl_certificate /etc/letsencrypt/live/media.hxy2333.site/fullchain.pem;' "${tls_modern}"
+assert_contains '媒体域名反代到 COS 桶' 'proxy_pass https://hxy-blog-media-1497610660.cos.ap-nanjing.myqcloud.com;' "${tls_modern}"
+assert_contains '反代保留 COS 的 Host' 'proxy_set_header Host hxy-blog-media-1497610660.cos.ap-nanjing.myqcloud.com;' "${tls_modern}"
+assert_contains '反代启用 SNI' 'proxy_ssl_server_name on;' "${tls_modern}"
+assert_contains '媒体入口只允许读取' 'limit_except GET HEAD' "${tls_modern}"
+
 # ---- 参数覆盖：域名与上游端口必须来自参数而不是硬编码 ----
 custom_config="$("${INSTALL}" --print-config tls --domain example.com --www blog.example.com --upstream 127.0.0.1:9090)"
 assert_contains '自定义主域名' 'server_name example.com;' "${custom_config}"
@@ -99,11 +108,17 @@ assert_contains '自定义 www 域名' 'server_name blog.example.com;' "${custom
 assert_contains '自定义上游端口' 'proxy_pass http://127.0.0.1:9090;' "${custom_config}"
 assert_contains '自定义证书目录' 'ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;' "${custom_config}"
 
+media_custom="$("${INSTALL}" --print-config tls --domain example.com --www blog.example.com --media-domain cdn.example.com --media-bucket bucket-1.cos.ap-shanghai.myqcloud.com)"
+assert_contains '自定义媒体域名' 'server_name cdn.example.com;' "${media_custom}"
+assert_contains '自定义媒体证书目录' 'ssl_certificate /etc/letsencrypt/live/cdn.example.com/fullchain.pem;' "${media_custom}"
+assert_contains '自定义媒体桶' 'proxy_pass https://bucket-1.cos.ap-shanghai.myqcloud.com;' "${media_custom}"
+
 # ---- 失败路径：非法输入必须在渲染前被拒绝 ----
 assert_exit 64 '拒绝非法域名' "${INSTALL}" --print-config tls --domain 'bad domain!'
 assert_exit 64 '拒绝非法上游' "${INSTALL}" --print-config tls --upstream 'http://127.0.0.1:8080'
 assert_exit 64 '拒绝未知的 http2 模式' "${INSTALL}" --print-config tls --http2 h3
 assert_exit 64 '拒绝未知的配置阶段' "${INSTALL}" --print-config tls,http
+assert_exit 64 '拒绝非法媒体桶' "${INSTALL}" --print-config tls --media-bucket 'http://bucket.example.com'
 
 # ---- 幂等：相同参数必须渲染出完全一致的结果，便于重复安装 ----
 first="$("${INSTALL}" --print-config tls)"

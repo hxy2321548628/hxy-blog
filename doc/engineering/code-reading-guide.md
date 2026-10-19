@@ -38,7 +38,7 @@
 
 图片上传遵循 `React 编辑器 → Axios multipart → Nginx 流式代理 → 管理员鉴权 → Media Service → 腾讯云 COS + MySQL`。浏览器只把文件对象保存在组件内存，Redux 保存文件名、进度、错误和媒体结果等可序列化状态；上传成功后把带替代文本的 Markdown 插入当前光标位置。Nginx 接受包含 multipart 开销的 11 MiB 请求并关闭请求体缓冲，Go API 再以 10 MiB 文件上限、格式签名、完整解码、尺寸/像素和 EXIF 规则执行最终校验。Sprint 6 起允许 BMP 与 GIF；GIF 先限制帧数和累积像素，再解码全部帧，原文件写入 COS 以保留动画。
 
-Media Service 使用不可预测对象键和 `Content-MD5` 写入 COS，并通过禁止覆盖请求头处理极小概率键冲突。COS 写入成功后才保存 `media_assets`；数据库失败时使用独立超时上下文补偿删除对象。正式正文只接收 `MEDIA_PUBLIC_BASE_URL` 生成的稳定 HTTPS URL，不保存 COS 默认域名。没有完整配置四个 `MEDIA_*` 变量时应用仍可启动，但上传明确返回可重试的 503，不回退到服务器磁盘。
+Media Service 使用不可预测对象键和 `Content-MD5` 写入 COS，并通过禁止覆盖请求头处理极小概率键冲突。COS 写入成功后才保存 `media_assets`；数据库失败时使用独立超时上下文补偿删除对象。正式正文只接收 `MEDIA_PUBLIC_BASE_URL` 生成的稳定 HTTPS URL，不保存 COS 默认域名。Sprint 10 起该域名通过宿主机 Nginx 只读反代 COS（`deploy/scripts/install-edge.sh` 的 media 站点块），证书与主站同一套 certbot 自动续期；因此上传返回的地址只由环境变量决定，前端不做任何域名改写。没有完整配置四个 `MEDIA_*` 变量时应用仍可启动，但上传明确返回可重试的 503，不回退到服务器磁盘。
 
 ## CI/CD 链
 
