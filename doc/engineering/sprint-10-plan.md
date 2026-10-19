@@ -1,7 +1,7 @@
 # Sprint 10 开发计划
 
 - 日期：2026-10-19
-- 状态：实施中
+- 状态：生产已启用；管理员重新上传图片的人工验收待完成
 - Sprint 目标：让新上传图片生成 `https://media.hxy2333.site/...` 的稳定地址，并让该域名具备自动续期的有效 HTTPS；同时回填历史文章中残留的 COS 默认域名。
 
 ## 背景
@@ -140,4 +140,17 @@ media 站点块与主站相互独立；即使 media 证书或反代异常，主�
 
 ## 验收记录
 
-- 待实施完成后补充本地检查、服务器执行输出与上传验收结果。
+本地验证（2026-10-19）：
+
+- `bash deploy/scripts/test-edge-config.sh`：42 项断言全部通过，覆盖媒体域名 80/443 渲染、独立证书、反代 Host/SNI、只读方法限制、非法参数与渲染幂等性。
+- `task check`：通过；Go 测试、React 28 个测试、ESLint、生产构建、Compose 配置与部署脚本语法检查均成功。
+
+生产验证（2026-10-19）：
+
+- `media.hxy2333.site` 的 A 记录已指向 `146.56.243.24`；安装脚本为其签发独立 Let's Encrypt 证书（有效期至 2027-01-17），并启用只读反代。
+- `task media:check -- --object media/2026/10/40ccd6eaaf2bf7d79e541d98bf007e44.png`：6 项全部通过，证书覆盖媒体域名、POST 返回 403、对象读取 200。
+- 文章 `bubble-sort` 的 3 个图片地址回填为媒体域名；PNG、BMP、GIF 均返回 200 且 Content-Type 正确。
+- `runtime.env` 的 `MEDIA_PUBLIC_BASE_URL` 已改为 `https://media.hxy2333.site` 并重建 `api`；容器内环境变量确认生效，公开详情接口已无 `cos.ap-nanjing` 地址。
+- `task edge:check`：10 项全部通过，主站 443、www 跳转与安全响应头未受媒体改动影响。
+- 首次安装时媒体证书签发后的本机校验因 reload 时序失败一次；已为媒体校验补上与主站相同的重试，重新执行安装脚本后通过。
+- 待人工验收：管理员在后台重新上传一张图片，确认插入的 Markdown 使用 `https://media.hxy2333.site/`。
