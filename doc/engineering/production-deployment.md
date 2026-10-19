@@ -21,7 +21,7 @@ GitHub Actions 只能通过专用 SSH 密钥调用固定部署入口，不能获
 | 即时备份目录 | `/var/backups/hxy-blog/mysql`，root:root `0700` |
 | COSCLI 配置 | `/etc/hxy-blog/cos-backup.yaml`，root:root `0600` |
 | 博客媒体凭据 | `/etc/hxy-blog/runtime.env` 中的 `MEDIA_*`，root:root `0600` |
-| 生产端口 | 仅 `127.0.0.1:8080`，备案完成前不开放 80/443 |
+| 生产端口 | 应用仅 `127.0.0.1:8080`；宿主机 Nginx 监听公网 80/443 |
 
 部署公钥必须使用 `restrict` 和强制命令：
 
@@ -58,6 +58,79 @@ Environment 只允许受保护的 `main` 分支部署，并要求人工批准。
 9. 失败时恢复 `previous.env`；首次部署失败则停止应用，但保留 MySQL 命名卷。
 
 应用回滚不会自动执行数据库 down migration。Schema 必须采用先扩展、后收缩的兼容迁移；需要回退数据库时由管理员评估数据兼容性后单独处理。
+
+## 公网 HTTPS 入口
+
+应用容器仍然只监听 `127.0.0.1:8080`，公网入口由宿主机 Nginx 独立承担。入口与应用发布解耦：更换镜像不需要改 Nginx，回滚应用也不影响证书。
+
+| 项目 | 约定 |
+| --- | --- |
+| 站点配置 | `/etc/nginx/conf.d/hxy-blog.conf`，由脚本整体渲染，不手工修改 |
+| 配置模板 | `deploy/edge/hxy-blog-http.conf.tmpl`、`deploy/edge/hxy-blog-tls.conf.tmpl` |
+| 安装脚本 | `deploy/scripts/install-edge.sh`，只在服务器上以 root 手工执行 |
+| 公网自检 | `deploy/scripts/check-public-entry.sh`，在任意机器执行并绕过本机代理 |
+| 证书目录 | `/etc/letsencrypt/live/hxy2333.site/` |
+| ACME webroot | `/var/www/certbot` |
+| 配置备份 | `/var/backups/hxy-blog/edge/`，root:root `0700` |
+| 规范域名 | `hxy2333.site`；`www` 永久 301 到主域名 |
+
+### 首次启用
+
+1. 确认容器健康：
+
+   ```bash
+   curl -fsS http://127.0.0.1:8080/healthz
+   curl -fsS http://127.0.0.1:8080/api/health
+   ```
+
+2. 在腾讯云轻量应用服务器控制台的防火墙放行 TCP 80 和 443。只在系统 `ufw`/`iptables` 放行不会生效。
+3. 在服务器执行安装脚本。脚本先写只含 80 的配置完成 ACME 校验，再切换为 HTTPS 配置：
+
+   ```bash
+   sudo ./deploy/scripts/install-edge.sh --email <证书通知邮箱>
+   ```
+
+4. 在开发机执行公网自检，直到全部通过：
+
+   ```bash
+   task edge:check -- --expect-ip <服务器公网 IP>
+   ```
+
+   自检脚本默认使用 `curl --noproxy '*'`，避免把本机代理的错误页误判为站点响应。
+
+5. 确认 `/etc/hxy-blog/runtime.env` 的来源包含 HTTPS 主域名，然后重启 `api` 容器：
+
+   ```dotenv
+   AUTH_ALLOWED_ORIGINS=https://hxy2333.site
+   ```
+
+   缺少该来源时后台登录会返回 `ORIGIN_NOT_ALLOWED`。
+
+模板改动可以先用 `task edge:config` 在本地做离线渲染断言，不需要 root、Nginx 或网络。
+
+### 证书续期
+
+`certbot` 由系统 timer 自动续期，续期成功后通过 `--deploy-hook 'systemctl reload nginx'` 让新证书生效。
+
+```bash
+systemctl list-timers 'certbot*'
+sudo certbot renew --dry-run
+```
+
+### 回滚
+
+```bash
+sudo rm -f /etc/nginx/conf.d/hxy-blog.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+删除后站点回到只能通过回环地址或 SSH 隧道访问的状态，证书与 ACME 记录保留；重新执行安装脚本即可再次启用。安装脚本是幂等的，`nginx -t` 失败时会自动恢复上一份配置。
+
+### 排障
+
+- 浏览器返回无响应体的 `502 Bad Gateway`，且响应头包含 `Keep-Alive: timeout=4` 或 `Proxy-Connection` 时，通常是本机代理的错误页；用 `task edge:check` 绕过代理确认。
+- 公网返回 `Connection refused`：宿主机没有监听 80/443，或腾讯云防火墙未放行。
+- 首页 502 但 `http://127.0.0.1:8080/healthz` 正常：检查 `docker compose ps` 中 `api` 的健康状态与容器日志。
 
 ## 备份和恢复演练
 
@@ -159,14 +232,14 @@ task test-media-cos
 - `media upload request completed`：结果分类、错误码、状态码、媒体 ID、字节数和总耗时。
 - 任意 `media compensation deletion failed`：必须立即人工检查无元数据孤立对象。
 
-## 备案期限制
+## 公网开放与备案
 
-- 不配置公网 DNS 切换、TLS 证书或 80/443 监听，也不通过公网 IP 暴露其他 Web 端口。
-- 只通过 SSH 在服务器本机访问 `http://127.0.0.1:8080`，或在开发机建立隧道后访问 `http://127.0.0.1:8080`：
+- ICP 备案已通过，`hxy2333.site` 与 `www.hxy2333.site` 均解析到生产服务器。
+- 公网入口按「公网 HTTPS 入口」一节启用：80 只用于 ACME 校验和 301 跳转，站点只在 443 提供。
+- 应用容器继续保持 `127.0.0.1:8080` 绑定，不直接暴露端口；公网流量必须经过宿主机 Nginx。
+- 公安备案与内容合规由站点所有者另行办理。
+- 需要临时关闭公网入口时按上一节回滚；验证仍可通过 SSH 隧道进行：
 
 ```bash
 ssh -N -L 8080:127.0.0.1:8080 tencent
 ```
-
-- 公网 IP 直接访问同样属于对外提供网站服务，不能作为首次备案期间的临时替代入口。
-- ICP 备案完成后，通过独立上线清单启用公网入口，不修改本部署权限模型。
