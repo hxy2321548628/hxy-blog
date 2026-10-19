@@ -8,21 +8,23 @@
 2. `src/backend/cmd/api` 与 `src/web/src`：理解最小应用请求链。
 3. `src/backend/internal/migrations`：理解文章、管理员和刷新会话的初始数据约束。
 4. `deploy/compose.yaml`、两个 Dockerfile 和 `src/web/nginx.conf`：理解容器如何组成运行环境。
-5. `.github/workflows/ci.yml`：理解 PR 为什么能阻止有问题的代码合并。
-6. `.github/workflows/release.yml` 与 `deploy/scripts/deploy.sh`：理解合并后如何发布和回滚。
-7. `deploy/scripts/backup-db.sh`、`sync-backup-cos.sh` 和 `restore-drill.sh`：理解数据保护闭环。
-8. `src/backend/internal/media` 与 `src/web/src/features/media`：理解图片校验、上传状态和 COS 一致性边界。
+5. `deploy/scripts/install-edge.sh`：理解公网 TLS 入口如何与容器解耦（Nginx 模板内嵌在脚本中）。
+6. `.github/workflows/ci.yml`：理解 PR 为什么能阻止有问题的代码合并。
+7. `.github/workflows/release.yml` 与 `deploy/scripts/deploy.sh`：理解合并后如何发布和回滚。
+8. `deploy/scripts/backup-db.sh`、`sync-backup-cos.sh` 和 `restore-drill.sh`：理解数据保护闭环。
+9. `src/backend/internal/media` 与 `src/web/src/features/media`：理解图片校验、上传状态和 COS 一致性边界。
 
 ## 请求链
 
 ```text
 浏览器
-  ├─ /assets、页面路由 ──> Nginx ──> React 静态文件
-  └─ /api/* ───────────> Nginx ──> Go API
-                                      └─ 后续业务请求 ──> MySQL / COS
+  └─ HTTPS ──> 宿主机 Nginx（TLS、80→443、www→主域名）
+                └─ 127.0.0.1:8080 ──> 容器 Nginx
+                      ├─ /assets、页面路由 ──> React 静态文件
+                      └─ /api/* ───────────> Go API ──> MySQL / COS
 ```
 
-开发时 Vite 代替 Nginx 代理 `/api`；生产时 Nginx 使用 Compose 服务名 `api` 转发。前端始终请求相对路径，因此不需要在业务代码中判断环境。
+开发时 Vite 代替 Nginx 代理 `/api`；生产时容器 Nginx 使用 Compose 服务名 `api` 转发，宿主机 Nginx 只负责 TLS 终结和端口收敛。前端始终请求相对路径，因此不需要在业务代码中判断环境。公网入口的 Nginx 模板内嵌在 `deploy/scripts/install-edge.sh` 中，由该脚本渲染并安装到 `/etc/nginx/conf.d/hxy-blog.conf`；配置改动可用 `task edge:config` 离线验证，上线后用 `task edge:check` 从公网复核。
 
 访客文章列表与详情遵循 `React 页面 → RTK Query → Axios → Gin Handler → Post Service → GORM Repository → MySQL` 的单一路径。Handler 只处理协议参数和响应转换；Repository 负责“仅已发布”的公开边界，并分别提供按发布时间倒序的分页列表和按稳定 slug 查询详情。详情页的 Markdown 在浏览器端按需加载，经过 GFM 扩展与 HTML 白名单清洗后渲染。
 
